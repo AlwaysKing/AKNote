@@ -13,11 +13,11 @@ FROM golang:1.25-alpine AS backend-builder
 RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
-COPY backend/ ./backend/
+COPY backend/ ./
 
-RUN CGO_ENABLED=1 GOOS=linux go build -o mdlibrary ./backend/cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -o mdlibrary ./cmd/server
 
 # Stage 3: Runtime
 FROM alpine:3.20

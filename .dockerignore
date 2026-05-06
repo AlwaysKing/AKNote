@@ -1,3 +1,5 @@
+.git
+.claude
 node_modules
 frontend/node_modules
 frontend/dist
@@ -6,6 +8,7 @@ data
 *.png
 test-*.cjs
 test-*.png
+test-results
 mdlibrary
-.git
-.claude
+docs/DESIGN.md
+docs/PLAN.md
