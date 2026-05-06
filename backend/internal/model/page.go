@@ -1,0 +1,42 @@
+package model
+
+import "time"
+
+type Page struct {
+	ID        int       `json:"id" db:"id"`
+	SpaceID   int       `json:"space_id" db:"space_id"`
+	Title     string    `json:"title" db:"title"`
+	FilePath  string    `json:"file_path" db:"file_path"`
+	Icon      string    `json:"icon" db:"icon"`
+	CoverURL  string    `json:"cover_url" db:"cover_url"`
+	SortOrder float64   `json:"sort_order" db:"sort_order"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	Content   string    `json:"content,omitempty"`
+	Children  []*Page   `json:"children,omitempty"`
+}
+
+type PageNode struct {
+	ID        int        `json:"id"`
+	Title     string     `json:"title"`
+	Icon      string     `json:"icon"`
+	SortOrder float64    `json:"sort_order"`
+	Children  []*PageNode `json:"children,omitempty"`
+}
+
+type CreatePageRequest struct {
+	Title     string `json:"title"`
+	ParentID  *int   `json:"parent_id,omitempty"`
+	Icon      string `json:"icon"`
+}
+
+type UpdatePageRequest struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type UpdatePageMetaRequest struct {
+	Icon      *string  `json:"icon"`
+	CoverURL  *string  `json:"cover_url"`
+	SortOrder *float64 `json:"sort_order"`
+}
