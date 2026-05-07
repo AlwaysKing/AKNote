@@ -132,6 +132,11 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
     i++;
   }
 
+  // BlockNote requires at least one block — return a default empty paragraph
+  if (blocks.length === 0) {
+    return [{ type: 'paragraph', content: [] }];
+  }
+
   return blocks;
 }
 

@@ -29,45 +29,52 @@ export default function PageViewPage() {
     await refreshPageTree();
   }, [spaceSlug, pageId, savePage, refreshPageTree]);
 
-  // Show loading state during initial load or refetch
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-notion-text"></div>
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-notion-border border-t-notion-text"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto py-12 px-4 text-center">
-        <p className="text-notion-textSecondary">{error}</p>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-notion-textSecondary mb-2">Failed to load page</p>
+          <p className="text-sm text-notion-textSecondary/60">{error}</p>
+        </div>
       </div>
     );
   }
 
   if (!currentPage) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-notion-text"></div>
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-6 w-6 border-2 border-notion-border border-t-notion-text"></div>
       </div>
     );
   }
 
+  const showCover = !!currentPage.cover_url;
+  const showIcon = !!currentPage.icon;
+
   return (
-    <div className="min-h-screen bg-notion-bg">
+    <div className="min-h-screen bg-notion-bg flex flex-col">
+      {/* Breadcrumb */}
       <Breadcrumb pageTitle={currentPage.title} spaceSlug={spaceSlug!} />
 
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="relative">
-          <CoverImage
-            coverUrl={currentPage.cover_url}
-            spaceSlug={spaceSlug!}
-            pageId={currentPage.id}
-          />
-        </div>
+      {/* Cover image */}
+      <CoverImage
+        coverUrl={currentPage.cover_url}
+        spaceSlug={spaceSlug!}
+        pageId={currentPage.id}
+      />
 
-        <div className="relative -mt-6 pl-4">
+      {/* Page content area */}
+      <div className="max-w-[720px] mx-auto w-full px-12 pb-32">
+        {/* Icon */}
+        <div className={showCover ? '-mt-8 mb-2' : 'mt-2 mb-2'}>
           <PageIcon
             icon={currentPage.icon}
             spaceSlug={spaceSlug!}
@@ -75,17 +82,42 @@ export default function PageViewPage() {
           />
         </div>
 
-        <div className="mt-4">
-          <h1 className="text-4xl font-semibold text-notion-text mb-8">
-            {currentPage.title}
-          </h1>
+        {/* Action hints when no cover/icon */}
+        {!showCover && !showIcon && (
+          <div className="flex gap-2 mb-2 -mt-2">
+            <CoverImage
+              coverUrl={currentPage.cover_url}
+              spaceSlug={spaceSlug!}
+              pageId={currentPage.id}
+            />
+            <PageIcon
+              icon={currentPage.icon}
+              spaceSlug={spaceSlug!}
+              pageId={currentPage.id}
+            />
+          </div>
+        )}
+        {!showCover && showIcon && (
+          <div className="mb-2 -mt-2">
+            <CoverImage
+              coverUrl={currentPage.cover_url}
+              spaceSlug={spaceSlug!}
+              pageId={currentPage.id}
+            />
+          </div>
+        )}
 
-          <PageEditor
-            initialContent={currentContent}
-            onSave={handleSave}
-            readOnly={false}
-          />
-        </div>
+        {/* Title */}
+        <h1 className="text-[40px] font-bold text-notion-text leading-tight mb-2 outline-none">
+          {currentPage.title || 'Untitled'}
+        </h1>
+
+        {/* Editor */}
+        <PageEditor
+          initialContent={currentContent}
+          onSave={handleSave}
+          readOnly={false}
+        />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@
 
   body {
     @apply bg-notion-bg text-notion-text antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -21,7 +21,7 @@
   }
 
   button {
-    @apply transition-colors duration-200;
+    @apply transition-colors duration-150;
   }
 
   input, textarea, select {
@@ -34,7 +34,6 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
@@ -43,21 +42,124 @@
     scrollbar-width: thin;
     scrollbar-color: #e9e9e7 transparent;
   }
-
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
   }
-
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
-
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: #e9e9e7;
     border-radius: 3px;
   }
-
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: #d4d4d2;
   }
+}
+
+/* ============================================
+   BlockNote Editor - Notion-like Custom Styles
+   ============================================ */
+
+.bn-editor {
+  font-size: 15px !important;
+  line-height: 1.7 !important;
+  color: #37352f !important;
+  padding: 0 !important;
+}
+
+.bn-editor .bn-block-content {
+  padding: 1px 0 !important;
+}
+
+/* Headings */
+.bn-editor [data-content-type="heading"] .bn-block-content {
+  font-weight: 600 !important;
+  margin-top: 1.2em !important;
+  margin-bottom: 0.3em !important;
+}
+
+.bn-editor [data-content-type="heading"][data-level="1"] .bn-block-content {
+  font-size: 1.875em !important;
+  margin-top: 1.6em !important;
+}
+
+.bn-editor [data-content-type="heading"][data-level="2"] .bn-block-content {
+  font-size: 1.5em !important;
+}
+
+.bn-editor [data-content-type="heading"][data-level="3"] .bn-block-content {
+  font-size: 1.25em !important;
+}
+
+/* Paragraphs */
+.bn-editor [data-content-type="paragraph"] .bn-block-content {
+  margin: 0 !important;
+}
+
+/* Bullet lists */
+.bn-editor [data-content-type="bulletListItem"] .bn-block-content {
+  margin: 0 !important;
+}
+
+/* Numbered lists */
+.bn-editor [data-content-type="numberedListItem"] .bn-block-content {
+  margin: 0 !important;
+}
+
+/* Quote blocks */
+.bn-editor [data-content-type="quote"] {
+  border-left: 3px solid currentColor !important;
+  padding-left: 14px !important;
+}
+
+/* Code blocks */
+.bn-editor [data-content-type="codeBlock"] {
+  background: #f7f6f3 !important;
+  border-radius: 4px !important;
+  padding: 12px 16px !important;
+  font-size: 13px !important;
+}
+
+.bn-editor [data-content-type="codeBlock"] .bn-block-content {
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
+}
+
+/* Divider */
+.bn-editor [data-content-type="divider"] hr {
+  border-color: #e9e9e7 !important;
+}
+
+/* Inline styles */
+.bn-editor strong {
+  font-weight: 600 !important;
+}
+
+.bn-editor em {
+  font-style: italic !important;
+}
+
+.bn-editor code {
+  background: #f7f6f3 !important;
+  border-radius: 3px !important;
+  padding: 2px 5px !important;
+  font-size: 0.9em !important;
+  font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
+}
+
+/* Placeholder text */
+.bn-editor .bn-block-content [data-placeholder]::before {
+  color: #c4c3c0 !important;
+}
+
+/* Slash menu */
+.bn-slash-menu {
+  border: 1px solid #e9e9e7 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Selection */
+.bn-editor ::selection {
+  background: #d4ebfb !important;
 }

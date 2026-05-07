@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { ChevronRight, FileText, ChevronDown } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ChevronRight, FileText, MoreHorizontal, Plus, Trash2, Edit3 } from 'lucide-react';
 import { Page } from '../../api/pages';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
+import { usePageStore } from '../../stores/pageStore';
 
 interface PageTreeItemProps {
   page: Page;
@@ -10,54 +11,186 @@ interface PageTreeItemProps {
 
 export default function PageTreeItem({ page, level }: PageTreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameTitle, setRenameTitle] = useState(page.title);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { spaceSlug } = useParams<{ spaceSlug: string }>();
+  const { createPage, deletePage, updateMetadata, refreshPageTree } = usePageStore();
   const hasChildren = page.children && page.children.length > 0;
   const isActive = location.pathname.includes(`/p/${page.id}`);
 
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (showMenu) {
+      const handler = (e: MouseEvent) => {
+        if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+          setShowMenu(false);
+        }
+      };
+      document.addEventListener('mousedown', handler);
+      return () => document.removeEventListener('mousedown', handler);
+    }
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (isRenaming && renameRef.current) {
+      renameRef.current.focus();
+      renameRef.current.select();
+    }
+  }, [isRenaming]);
+
   const handleClick = () => {
+    if (isRenaming) return;
     navigate(`/s/${spaceSlug}/p/${page.id}`);
+  };
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left - 140 });
+    setShowMenu(true);
+  };
+
+  const handleAddSubPage = async () => {
+    if (!spaceSlug) return;
+    setShowMenu(false);
+    try {
+      const newPage = await createPage(spaceSlug, 'Untitled', page.id);
+      await refreshPageTree();
+      navigate(`/s/${spaceSlug}/p/${newPage.id}`);
+    } catch (err) {
+      console.error('Failed to create sub-page:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!spaceSlug) return;
+    setShowMenu(false);
+    try {
+      await deletePage(spaceSlug, page.id);
+      await refreshPageTree();
+      if (isActive) {
+        navigate(`/s/${spaceSlug}`);
+      }
+    } catch (err) {
+      console.error('Failed to delete page:', err);
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!spaceSlug || !renameTitle.trim()) {
+      setRenameTitle(page.title);
+      setIsRenaming(false);
+      return;
+    }
+    try {
+      await updateMetadata(spaceSlug, page.id, { title: renameTitle.trim() });
+      await refreshPageTree();
+    } catch (err) {
+      console.error('Failed to rename page:', err);
+      setRenameTitle(page.title);
+    }
+    setIsRenaming(false);
   };
 
   return (
     <div>
-      <button
-        onClick={handleClick}
-        className={`w-full flex items-center gap-1 px-2 py-1 rounded hover:bg-notion-hover transition-colors text-left group ${
+      <div
+        className={`w-full flex items-center gap-1 py-1 rounded hover:bg-notion-hover transition-colors text-left group ${
           isActive ? 'bg-notion-hover' : ''
         }`}
-        style={{ paddingLeft: `${level * 16 + 8}px` }}
+        style={{ paddingLeft: `${level * 16 + 8}px`, paddingRight: '4px' }}
       >
-        {hasChildren ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            className="p-0.5 hover:bg-notion-border rounded transition-colors"
-          >
-            {isExpanded ? (
-              <ChevronDown className="w-4 h-4 text-notion-textSecondary" />
-            ) : (
-              <ChevronRight className="w-4 h-4 text-notion-textSecondary" />
-            )}
-          </button>
-        ) : (
-          <span className="w-6" />
-        )}
+        {/* Expand/Collapse toggle */}
+        <button
+          onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+          className={`p-0.5 hover:bg-notion-border rounded transition-colors flex-shrink-0 ${
+            hasChildren ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <ChevronRight className={`w-4 h-4 text-notion-textSecondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
 
+        {/* Page icon or default */}
         {page.icon ? (
-          <span className="text-sm">{page.icon}</span>
+          <span className="text-sm flex-shrink-0 w-4 text-center">{page.icon}</span>
         ) : (
-          <FileText className="w-4 h-4 text-notion-textSecondary" />
+          <FileText className="w-4 h-4 text-notion-textSecondary flex-shrink-0" />
         )}
 
-        <span className="text-sm text-notion-text truncate flex-1">{page.title}</span>
-      </button>
+        {/* Title or rename input */}
+        {isRenaming ? (
+          <input
+            ref={renameRef}
+            value={renameTitle}
+            onChange={(e) => setRenameTitle(e.target.value)}
+            onBlur={handleRenameSubmit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameSubmit();
+              if (e.key === 'Escape') { setRenameTitle(page.title); setIsRenaming(false); }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 text-sm text-notion-text bg-white border border-blue-400 rounded px-1 py-0 focus:outline-none min-w-0"
+          />
+        ) : (
+          <span
+            onClick={handleClick}
+            className="text-sm text-notion-text truncate flex-1 cursor-pointer hover:underline decoration-notion-textSecondary/30"
+          >
+            {page.title || 'Untitled'}
+          </span>
+        )}
 
+        {/* More menu button */}
+        <button
+          onClick={openMenu}
+          className="p-0.5 hover:bg-notion-border rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+        >
+          <MoreHorizontal className="w-4 h-4 text-notion-textSecondary" />
+        </button>
+      </div>
+
+      {/* Context menu */}
+      {showMenu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 bg-white border border-notion-border rounded-lg shadow-xl py-1 min-w-[180px]"
+          style={{ top: menuPos.top, left: menuPos.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={handleAddSubPage}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+          >
+            <Plus className="w-4 h-4 text-notion-textSecondary" />
+            Add sub-page
+          </button>
+          <button
+            onClick={() => { setShowMenu(false); setIsRenaming(true); }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+          >
+            <Edit3 className="w-4 h-4 text-notion-textSecondary" />
+            Rename
+          </button>
+          <hr className="my-1 border-notion-border" />
+          <button
+            onClick={handleDelete}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {/* Children */}
       {hasChildren && isExpanded && (
-        <div className="mt-0.5">
+        <div>
           {page.children!.map((child) => (
             <PageTreeItem key={child.id} page={child} level={level + 1} />
           ))}

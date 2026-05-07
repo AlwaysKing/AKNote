@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSpaceStore } from '../stores/spaceStore';
 import { usePageStore } from '../stores/pageStore';
+import { Plus, Hash } from 'lucide-react';
 
 export default function SpacePage() {
   const { spaceSlug } = useParams<{ spaceSlug: string }>();
@@ -21,10 +22,17 @@ export default function SpacePage() {
     }
   }, [spaceSlug, currentSpace, setCurrentSpace]);
 
+  // Auto-navigate to first page if available
+  useEffect(() => {
+    if (pageTree.length > 0 && spaceSlug) {
+      navigate(`/s/${spaceSlug}/p/${pageTree[0].id}`, { replace: true });
+    }
+  }, [pageTree, spaceSlug, navigate]);
+
   const handleCreateFirstPage = async () => {
     if (!spaceSlug) return;
     try {
-      const newPage = await createPage(spaceSlug, 'Welcome');
+      const newPage = await createPage(spaceSlug, 'Getting Started');
       navigate(`/s/${spaceSlug}/p/${newPage.id}`);
     } catch (error) {
       console.error('Failed to create page:', error);
@@ -32,49 +40,27 @@ export default function SpacePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4">
-      <div className="text-center">
-        {currentSpace?.icon && (
-          <div className="text-6xl mb-4">{currentSpace.icon}</div>
-        )}
-        <h1 className="text-3xl font-semibold text-notion-text mb-2">
-          {currentSpace?.name || 'Space'}
-        </h1>
-        <p className="text-notion-textSecondary mb-8">
-          {currentSpace?.description || 'Your knowledge base'}
-        </p>
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center max-w-md">
+        <div className="mb-6">
+          <div className="w-16 h-16 bg-notion-sidebarBg rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Hash className="w-8 h-8 text-notion-textSecondary" />
+          </div>
+          <h1 className="text-2xl font-bold text-notion-text mb-1">
+            {currentSpace?.name || 'Space'}
+          </h1>
+          <p className="text-notion-textSecondary text-sm">
+            This workspace is empty
+          </p>
+        </div>
 
-        {pageTree.length === 0 ? (
-          <div className="space-y-4">
-            <p className="text-notion-textSecondary">
-              This space is empty. Create your first page to get started.
-            </p>
-            <button
-              onClick={handleCreateFirstPage}
-              className="px-4 py-2 bg-notion-text text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              Create first page
-            </button>
-          </div>
-        ) : (
-          <div className="text-left">
-            <h2 className="text-lg font-medium text-notion-text mb-4">Pages</h2>
-            <div className="space-y-2">
-              {pageTree.map((page) => (
-                <button
-                  key={page.id}
-                  onClick={() => navigate(`/s/${spaceSlug}/p/${page.id}`)}
-                  className="w-full text-left px-4 py-3 rounded-lg hover:bg-notion-hover transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    {page.icon && <span>{page.icon}</span>}
-                    <span className="text-notion-text">{page.title}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <button
+          onClick={handleCreateFirstPage}
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-notion-text text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />
+          Create your first page
+        </button>
       </div>
     </div>
   );
