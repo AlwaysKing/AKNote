@@ -138,7 +138,7 @@ export default function PageViewPage() {
       <div className={`${currentPage.full_page ? 'w-full px-24' : 'max-w-[720px] px-16'} mx-auto w-full pb-32 relative group/page-header`}>
         {/* Action hints row - hover only, at very top of content area */}
         {(!showCover || !currentPage.icon) && (
-          <div className={`flex items-center gap-2 opacity-0 group-hover/page-header:opacity-100 transition-opacity duration-200 ${showCover ? `absolute top-0 ${currentPage.full_page ? 'left-[104px]' : 'left-[72px]'}` : 'mb-1'}`}>
+          <div className="flex items-center gap-2 opacity-0 group-hover/page-header:opacity-100 transition-opacity duration-200 mb-4">
             {!currentPage.icon && (
               <PageIcon
                 icon={currentPage.icon}
@@ -175,7 +175,7 @@ export default function PageViewPage() {
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
           onKeyDown={handleTitleKeyDown}
-          className={`text-[40px] font-bold text-notion-text leading-[1.2] outline-none focus:outline-none mb-1 px-2 ${showCover && !currentPage.icon ? 'mt-[76px]' : ''}`}
+          className="text-[40px] font-bold text-notion-text leading-[1.2] outline-none focus:outline-none mb-1 px-2"
           data-placeholder="未命名页面"
         >
           {currentPage.title || '未命名页面'}
