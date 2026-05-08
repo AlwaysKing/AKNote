@@ -135,21 +135,10 @@ export default function PageViewPage() {
       )}
 
       {/* Page content area */}
-      <div className={`${currentPage.full_page ? 'w-full' : 'max-w-[720px]'} mx-auto w-full px-16 pb-32 group/page-header`}>
-        {/* Icon - only renders when set */}
-        {currentPage.icon && (
-          <div className={showCover ? '-mt-[72px] mb-0' : 'mt-6 mb-0'}>
-            <PageIcon
-              icon={currentPage.icon}
-              spaceSlug={spaceSlug!}
-              pageId={currentPage.id}
-            />
-          </div>
-        )}
-
-        {/* Action hints row - hover only, below icon/cover */}
+      <div className={`${currentPage.full_page ? 'w-full px-24' : 'max-w-[720px] px-16'} mx-auto w-full pb-32 relative group/page-header`}>
+        {/* Action hints row - hover only, at very top of content area */}
         {(!showCover || !currentPage.icon) && (
-          <div className={`flex items-center gap-2 mb-1 opacity-0 group-hover/page-header:opacity-100 transition-opacity duration-200 ${!showCover && !currentPage.icon ? 'mt-2' : ''}`}>
+          <div className={`flex items-center gap-2 opacity-0 group-hover/page-header:opacity-100 transition-opacity duration-200 ${showCover ? 'absolute left-2 top-0' : 'mb-1'}`}>
             {!currentPage.icon && (
               <PageIcon
                 icon={currentPage.icon}
@@ -167,6 +156,17 @@ export default function PageViewPage() {
           </div>
         )}
 
+        {/* Icon - overlaps cover when cover exists */}
+        {currentPage.icon && (
+          <div className={showCover ? '-mt-12 mb-12 ml-2' : 'mt-0 mb-12 ml-2'}>
+            <PageIcon
+              icon={currentPage.icon}
+              spaceSlug={spaceSlug!}
+              pageId={currentPage.id}
+            />
+          </div>
+        )}
+
         {/* Title */}
         <h1
           key={`title-${currentPage.id}`}
@@ -175,7 +175,7 @@ export default function PageViewPage() {
           suppressContentEditableWarning
           onBlur={handleTitleBlur}
           onKeyDown={handleTitleKeyDown}
-          className="text-[40px] font-bold text-notion-text leading-tight mb-1 outline-none focus:outline-none px-2"
+          className={`text-[40px] font-bold text-notion-text leading-tight outline-none focus:outline-none mb-1 px-2 ${showCover && !currentPage.icon ? 'mt-[78px]' : ''}`}
           data-placeholder="未命名页面"
         >
           {currentPage.title || '未命名页面'}
