@@ -150,11 +150,12 @@ h4[contenteditable],
 }
 
 /* H1: outer padding-top 30px */
-.bn-editor .bn-block-outer:has([data-content-type="heading"][data-level="1"]) {
+/* BlockNote H1 没有 data-level 属性，用 :not([data-level]) 匹配 */
+.bn-editor .bn-block-outer:has([data-content-type="heading"]:not([data-level])) {
   padding-top: 30px !important;
   padding-bottom: 6px !important;
 }
-.bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] {
+.bn-editor .bn-block-content[data-content-type="heading"]:not([data-level]) {
   font-size: 30px !important;
   line-height: 39px !important;
 }
