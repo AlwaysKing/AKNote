@@ -101,7 +101,7 @@ export default function PageTreeItem({ page, level }: PageTreeItemProps) {
   return (
     <div>
       <div
-        className={`w-full flex items-center gap-1 py-[5px] px-3 rounded-md hover:bg-notion-hover transition-colors text-left group ${
+        className={`w-full flex items-center gap-1 h-[30px] px-3 rounded hover:bg-notion-hover transition-colors text-left group ${
           isActive ? 'bg-notion-hover' : ''
         }`}
         style={{ paddingLeft: `${level * 16 + 12}px`, paddingRight: '8px' }}

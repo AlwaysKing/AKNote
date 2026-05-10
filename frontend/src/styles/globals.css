@@ -63,7 +63,7 @@
 
 /* BlockNote Notion 主题覆盖 */
 .bn-root {
-  --bn-colors-editor-text: #37352f !important;
+  --bn-colors-editor-text: #2c2c2b !important;
   --bn-colors-editor-background: #ffffff !important;
   --bn-colors-menu-text: #37352f !important;
   --bn-colors-menu-background: #ffffff !important;
@@ -83,42 +83,112 @@
   --bn-border-radius: 8px !important;
 }
 
+/* 覆盖 BlockNote 内置的 .bn-default-styles (Inter font) */
+.bn-default-styles {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol" !important;
+  -webkit-font-smoothing: auto !important;
+  -moz-osx-font-smoothing: auto !important;
+}
+
 .bn-editor {
   font-size: 16px !important;
   line-height: 1.5 !important;
-  color: #37352f !important;
+  color: #2c2c2b !important;
   padding: 0 8px !important;
 }
 
 /* 标题和编辑器保持系统默认字体渲染，不受 body antialiased 影响 */
 h1[contenteditable],
+h2[contenteditable],
+h3[contenteditable],
+h4[contenteditable],
 .bn-editor {
   -webkit-font-smoothing: auto !important;
 }
 
+/* Block 外层: 对应 Notion 的 padding-top/bottom: 6px (不加水平padding，避免破坏对齐) */
+.bn-editor .bn-block-outer {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+/* Block 内层文本: 对应 Notion 的 padding-top/bottom: 2px */
 .bn-editor .bn-block-content {
-  padding: 2px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
 }
 
-/* Headings */
-.bn-editor [data-content-type="heading"] .bn-block-content {
+/* Inline content: Notion 文本属性 */
+.bn-editor .bn-inline-content {
+  word-break: break-word !important;
+  white-space-collapse: break-spaces !important;
+  font-feature-settings: normal !important;
+  font-variant-ligatures: normal !important;
+  font-synthesis-small-caps: auto !important;
+}
+
+/* Headings — match Notion's outer padding-top values */
+/* Using :has() to target the bn-block-outer parent for heading spacing */
+.bn-editor .bn-block-content[data-content-type="heading"] {
   font-weight: 600 !important;
-  color: #37352f !important;
-  margin-top: 1.2em !important;
-  margin-bottom: 0.3em !important;
+  color: #2c2c2b !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
-.bn-editor [data-content-type="heading"][data-level="1"] .bn-block-content {
-  font-size: 1.875em !important;
-  margin-top: 1.6em !important;
+/* Override browser default heading font-weights */
+.bn-editor [data-content-type="heading"] h1,
+.bn-editor [data-content-type="heading"] h2,
+.bn-editor [data-content-type="heading"] h3,
+.bn-editor [data-content-type="heading"] h4 {
+  font-weight: 600 !important;
 }
 
-.bn-editor [data-content-type="heading"][data-level="2"] .bn-block-content {
-  font-size: 1.5em !important;
+/* Also override inline-content font-weight for headings */
+.bn-editor [data-content-type="heading"] .bn-inline-content {
+  font-weight: 600 !important;
 }
 
-.bn-editor [data-content-type="heading"][data-level="3"] .bn-block-content {
-  font-size: 1.25em !important;
+/* H1: outer padding-top 30px */
+.bn-editor .bn-block-outer:has([data-content-type="heading"][data-level="1"]) {
+  padding-top: 30px !important;
+  padding-bottom: 6px !important;
+}
+.bn-editor .bn-block-content[data-content-type="heading"][data-level="1"] {
+  font-size: 30px !important;
+  line-height: 39px !important;
+}
+
+/* H2: outer padding-top 26px */
+.bn-editor .bn-block-outer:has([data-content-type="heading"][data-level="2"]) {
+  padding-top: 26px !important;
+  padding-bottom: 6px !important;
+}
+.bn-editor .bn-block-content[data-content-type="heading"][data-level="2"] {
+  font-size: 24px !important;
+  line-height: 31.2px !important;
+}
+
+/* H3: outer padding-top 22px */
+.bn-editor .bn-block-outer:has([data-content-type="heading"][data-level="3"]) {
+  padding-top: 22px !important;
+  padding-bottom: 6px !important;
+}
+.bn-editor .bn-block-content[data-content-type="heading"][data-level="3"] {
+  font-size: 20px !important;
+  line-height: 26px !important;
+}
+
+/* H4: outer padding-top 18px */
+.bn-editor .bn-block-outer:has([data-content-type="heading"][data-level="4"]) {
+  padding-top: 18px !important;
+  padding-bottom: 6px !important;
+}
+.bn-editor .bn-block-content[data-content-type="heading"][data-level="4"] {
+  font-size: 18px !important;
+  line-height: 23.4px !important;
+  font-weight: 600 !important;
+  color: #2c2c2b !important;
 }
 
 /* Paragraphs */
@@ -126,37 +196,85 @@ h1[contenteditable],
   margin: 0 !important;
 }
 
-/* Bullet lists */
-.bn-editor [data-content-type="bulletListItem"] .bn-block-content {
+/* Bullet lists — Notion: outer padding-top 6px, padding-bottom 1px */
+.bn-editor [data-content-type="bulletListItem"] {
   margin: 0 !important;
 }
-
-/* Numbered lists */
-.bn-editor [data-content-type="numberedListItem"] .bn-block-content {
-  margin: 0 !important;
+.bn-editor .bn-block-outer:has([data-content-type="bulletListItem"]) {
+  padding-bottom: 1px !important;
 }
 
-/* Quote blocks */
+/* Numbered lists — same structure as bullet */
+.bn-editor [data-content-type="numberedListItem"] {
+  margin: 0 !important;
+}
+.bn-editor .bn-block-outer:has([data-content-type="numberedListItem"]) {
+  padding-bottom: 1px !important;
+}
+
+/* Check list (todo) — Notion: outer padding-top 1px, padding-bottom 1px */
+.bn-editor [data-content-type="checkListItem"] {
+  margin: 0 !important;
+}
+.bn-editor .bn-block-outer:has([data-content-type="checkListItem"]) {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+/* Quote blocks — Notion: border-left 3px solid currentColor, padding-left 14px */
+/* Reset BlockNote's inner blockquote border first */
+.bn-editor [data-content-type="quote"] blockquote {
+  border-left: none !important;
+  padding-left: 0 !important;
+  margin: 0 !important;
+  color: inherit !important;
+}
 .bn-editor [data-content-type="quote"] {
   border-left: 3px solid currentColor !important;
   padding-left: 14px !important;
 }
 
-/* Code blocks */
+/* Callout blocks — Notion: bg #f9f8f7, border-radius 10px, padding 12px */
+.bn-editor [data-content-type="callout"] {
+  background: #f9f8f7 !important;
+  border-radius: 10px !important;
+  padding: 12px !important;
+  border: 1px solid transparent !important;
+}
+
+/* Code blocks — Notion: bg rgba(66,35,3,0.03), border-radius 10px */
 .bn-editor [data-content-type="codeBlock"] {
-  background: #f7f6f3 !important;
-  border-radius: 4px !important;
-  padding: 12px 16px !important;
-  font-size: 13px !important;
+  background: rgba(66, 35, 3, 0.03) !important;
+  color: #2c2c2b !important;
+  border-radius: 10px !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  line-height: 24px !important;
 }
-
-.bn-editor [data-content-type="codeBlock"] .bn-block-content {
+.bn-editor [data-content-type="codeBlock"] pre {
+  padding: 16px !important;
+}
+.bn-editor [data-content-type="codeBlock"] .bn-inline-content,
+.bn-editor [data-content-type="codeBlock"] code {
   font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: inherit !important;
 }
 
-/* Divider */
+/* Divider — Notion: height 13px wrapper, separator bg rgba(28,19,1,.11), height 1px */
+.bn-editor .bn-block-outer:has([data-content-type="divider"]) {
+  padding: 0 !important;
+}
+.bn-editor [data-content-type="divider"] {
+  height: 13px !important;
+  padding-inline: 8px !important;
+}
 .bn-editor [data-content-type="divider"] hr {
-  border-color: #e9e9e7 !important;
+  border: none !important;
+  background-color: rgba(28, 19, 1, 0.11) !important;
+  height: 1px !important;
+  margin: 6px 0 !important;
 }
 
 /* Inline styles */
@@ -186,17 +304,16 @@ h1[contenteditable],
   background: #d4ebfb;
 }
 
-/* Side Menu Notion Style */
+/* Side Menu Notion Style — appears on left of block on hover */
 .bn-side-menu {
   display: flex !important;
   align-items: center !important;
-  gap: 0px !important;
+  gap: 1px !important;
   opacity: 0 !important;
   transition: opacity 0.15s ease !important;
   position: absolute !important;
-  left: -3px !important;
-  width: 24px !important;
-  height: 24px !important;
+  left: -48px !important;
+  width: 48px !important;
   z-index: 10 !important;
 }
 
@@ -211,8 +328,8 @@ h1[contenteditable],
 
 /* SideMenu 按钮样式 */
 .bn-side-menu .bn-button {
-  width: 22px !important;
-  height: 22px !important;
+  width: 24px !important;
+  height: 24px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -386,4 +503,85 @@ h1[contenteditable],
 /* Active page item - show primary text color */
 [data-page-tree] .bg-notion-hover .cursor-pointer.truncate {
   color: #37352f;
+}
+
+/* ============================================
+   Block Selection - Notion-like Styles
+   ============================================ */
+
+/* Block hover indicator - subtle background on hover */
+.bn-block-outer:hover > .bn-block > .bn-block-content {
+  border-radius: 4px;
+}
+
+/* Selected block — blue left border indicator */
+.bn-block-outer[data-selected="true"] > .bn-block,
+.bn-block-outer.block-selected > .bn-block {
+  position: relative;
+}
+
+.bn-block-outer[data-selected="true"] > .bn-block::before,
+.bn-block-outer.block-selected > .bn-block::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #2383e2;
+  border-radius: 2px;
+}
+
+/* Block selection highlight */
+.bn-block-outer.block-selected {
+  background: rgba(35, 131, 226, 0.04) !important;
+  border-radius: 4px;
+}
+
+/* ============================================
+   Table Styles - Notion-like
+   ============================================ */
+.bn-editor [data-content-type="table"] {
+  border: 1px solid #e9e9e7 !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+}
+
+.bn-editor [data-content-type="table"] table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  width: 100% !important;
+}
+
+.bn-editor [data-content-type="table"] td,
+.bn-editor [data-content-type="table"] th {
+  border: 1px solid #e9e9e7 !important;
+  padding: 6px 8px !important;
+  font-size: 14px !important;
+  color: #2c2c2b !important;
+}
+
+.bn-editor [data-content-type="table"] th {
+  background: #f7f6f3 !important;
+  font-weight: 500 !important;
+}
+
+/* ============================================
+   Image Block Styles - Notion-like
+   ============================================ */
+.bn-editor [data-content-type="image"] {
+  text-align: center !important;
+}
+
+.bn-editor [data-content-type="image"] img {
+  border-radius: 4px !important;
+  max-width: 100% !important;
+}
+
+/* ============================================
+   Toggle / Collapsible Styles - Notion-like
+   ============================================ */
+.bn-editor [data-content-type="bulletListItem"] [data-editable="false"],
+.bn-editor [data-content-type="numberedListItem"] [data-editable="false"] {
+  user-select: none !important;
 }

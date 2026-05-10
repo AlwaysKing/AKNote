@@ -14,6 +14,7 @@ export function PageEditor({ initialContent, onSave, readOnly = false }: PageEdi
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const editor: BlockNoteEditor = useCreateBlockNote({
     initialContent: markdownToBlocks(initialContent),
@@ -47,6 +48,43 @@ export function PageEditor({ initialContent, onSave, readOnly = false }: PageEdi
     }, 2000);
   }, [triggerSave]);
 
+  // Block selection: click on empty space or use Escape to deselect
+  useEffect(() => {
+    const container = editorRef.current;
+    if (!container || readOnly) return;
+
+    const handleClick = (e: MouseEvent) => {
+      // Clear any existing block selections
+      const existing = container.querySelectorAll('.block-selected');
+      existing.forEach(el => el.classList.remove('block-selected'));
+
+      // Find the clicked block
+      const target = (e.target as HTMLElement).closest('.bn-block-outer');
+      if (target) {
+        // Only select if clicked on the block's empty area (not on content)
+        const contentEl = (e.target as HTMLElement).closest('.bn-block-content, .bn-inline-content, [contenteditable]');
+        if (!contentEl) {
+          e.preventDefault();
+          target.classList.add('block-selected');
+        }
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const existing = container.querySelectorAll('.block-selected');
+        existing.forEach(el => el.classList.remove('block-selected'));
+      }
+    };
+
+    container.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      container.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [readOnly]);
+
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -59,7 +97,7 @@ export function PageEditor({ initialContent, onSave, readOnly = false }: PageEdi
   }, [hasChanges, readOnly, triggerSave]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={editorRef}>
       {(hasChanges || isSaving) && (
         <div className="fixed top-4 right-4 z-50 bg-white px-3 py-1.5 rounded-lg shadow-md border border-gray-200 text-sm">
           {isSaving ? (
