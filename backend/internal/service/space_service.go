@@ -31,13 +31,17 @@ func NewSpaceService(
 	}
 }
 
-func (s *SpaceService) List() ([]*model.Space, error) {
+func (s *SpaceService) List(isAdmin bool, userID int) ([]*model.Space, error) {
 	// Sync spaces from filesystem first
 	if err := s.SyncFromFS(); err != nil {
 		return nil, fmt.Errorf("failed to sync spaces: %w", err)
 	}
 
-	return s.spaceRepo.ListByUserID(0)
+	// Admin sees all spaces, regular users see only their spaces
+	if isAdmin {
+		return s.spaceRepo.ListByUserID(0)
+	}
+	return s.spaceRepo.ListByUserID(userID)
 }
 
 func (s *SpaceService) GetBySlug(slug string) (*model.Space, error) {
@@ -156,6 +160,12 @@ func (s *SpaceService) RemoveMember(spaceID, memberID int) error {
 	}
 
 	return s.memberRepo.Delete(memberID)
+}
+
+// IsSpaceMember checks if a user is a member of a space.
+func (s *SpaceService) IsSpaceMember(spaceID, userID int) bool {
+	member, err := s.memberRepo.GetBySpaceAndUser(spaceID, userID)
+	return err == nil && member != nil
 }
 
 func (s *SpaceService) SyncFromFS() error {

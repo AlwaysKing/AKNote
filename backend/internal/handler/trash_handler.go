@@ -9,6 +9,9 @@ import (
 
 func (h *PageHandler) ListTrash(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	items, err := h.pageService.ListTrash(slug)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -20,6 +23,9 @@ func (h *PageHandler) ListTrash(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) RestoreFromTrash(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	space, err := h.spaceService.GetBySlug(slug)
 	if err != nil {
 		http.Error(w, "Space not found", http.StatusNotFound)
@@ -46,6 +52,9 @@ func (h *PageHandler) RestoreFromTrash(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) PermanentDelete(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 
 	var req struct {
 		TrashPath string `json:"trash_path"`

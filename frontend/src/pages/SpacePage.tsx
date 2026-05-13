@@ -2,12 +2,12 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSpaceStore } from '../stores/spaceStore';
 import { usePageStore } from '../stores/pageStore';
-import { Plus, Hash } from 'lucide-react';
+import { Plus, Hash, Lock } from 'lucide-react';
 
 export default function SpacePage() {
   const { spaceSlug } = useParams<{ spaceSlug: string }>();
   const navigate = useNavigate();
-  const { currentSpace, setCurrentSpace, pageTree } = useSpaceStore();
+  const { currentSpace, setCurrentSpace, pageTree, error } = useSpaceStore();
   const { createPage } = usePageStore();
 
   useEffect(() => {
@@ -38,6 +38,29 @@ export default function SpacePage() {
       console.error('Failed to create page:', error);
     }
   };
+
+  // 无权限提示
+  if (error && error.includes('403')) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-notion-sidebarBg rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-8 h-8 text-notion-textSecondary" />
+          </div>
+          <h1 className="text-2xl font-bold text-notion-text mb-1">没有访问权限</h1>
+          <p className="text-notion-textSecondary text-sm mb-6">
+            你不是该空间的成员，无法访问此内容。
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-5 py-2.5 bg-notion-text text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex items-center justify-center">

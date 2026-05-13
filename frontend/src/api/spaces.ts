@@ -29,6 +29,11 @@ export const spacesApi = {
     return response.data;
   },
 
+  listAll: async (): Promise<Space[]> => {
+    const response = await apiClient.get<Space[]>('/spaces', { params: { all: true } });
+    return response.data;
+  },
+
   get: async (slug: string): Promise<Space> => {
     const response = await apiClient.get<Space>(`/spaces/${slug}`);
     return response.data;

@@ -95,32 +95,36 @@ func (r *SpaceRepository) GetBySlug(slug string) (*model.Space, error) {
 }
 
 func (r *SpaceRepository) ListByUserID(userID int) ([]*model.Space, error) {
-	query := `
-		SELECT DISTINCT s.id, s.name, s.slug, s.icon, s.description, s.created_at, s.updated_at
-		FROM spaces s
-		LEFT JOIN space_members sm ON s.id = sm.space_id
-		WHERE s.id IN (
-			SELECT space_id FROM space_members WHERE user_id = ?
-			UNION
-			SELECT id FROM spaces WHERE name IN (SELECT name FROM spaces)
-		)
-		ORDER BY s.created_at DESC
-	`
+	// userID == 0 means return all spaces (used by admin)
+	// Otherwise, only return spaces where the user is a member
+	var query string
+	var rows *sql.Rows
+	var err error
 
-	// For now, return all spaces (will implement proper permissions later)
-	query = `
-		SELECT id, name, slug, icon, description, created_at, updated_at
-		FROM spaces
-		ORDER BY created_at DESC
-	`
+	if userID == 0 {
+		query = `
+			SELECT id, name, slug, icon, description, created_at, updated_at
+			FROM spaces
+			ORDER BY created_at DESC
+		`
+		rows, err = r.db.Query(query)
+	} else {
+		query = `
+			SELECT DISTINCT s.id, s.name, s.slug, s.icon, s.description, s.created_at, s.updated_at
+			FROM spaces s
+			JOIN space_members sm ON s.id = sm.space_id
+			WHERE sm.user_id = ?
+			ORDER BY s.created_at DESC
+		`
+		rows, err = r.db.Query(query, userID)
+	}
 
-	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list spaces: %w", err)
 	}
 	defer rows.Close()
 
-	var spaces []*model.Space
+	spaces := make([]*model.Space, 0)
 	for rows.Next() {
 		var space model.Space
 		var icon, description sql.NullString

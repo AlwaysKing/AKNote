@@ -7,6 +7,7 @@ import SpacePage from './pages/SpacePage';
 import PageViewPage from './pages/PageViewPage';
 import AdminPage from './pages/AdminPage';
 import TrashPage from './pages/TrashPage';
+import WelcomePage from './pages/WelcomePage';
 import { useAuthStore } from './stores/authStore';
 import { useSpaceStore } from './stores/spaceStore';
 
@@ -19,6 +20,8 @@ function HomeRedirect() {
         const spaces = useSpaceStore.getState().spaces;
         if (spaces.length > 0) {
           window.location.href = `/s/${spaces[0].slug}`;
+        } else {
+          window.location.href = '/welcome';
         }
       });
     }
@@ -79,6 +82,16 @@ function App() {
           }
         >
           <Route index element={<AdminPage />} />
+        </Route>
+        <Route
+          path="/welcome"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<WelcomePage />} />
         </Route>
         <Route path="/" element={<HomeRedirect />} />
       </Routes>

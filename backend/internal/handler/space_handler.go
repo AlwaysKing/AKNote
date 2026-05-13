@@ -13,16 +13,30 @@ import (
 
 type SpaceHandler struct {
 	spaceService *service.SpaceService
+	authService  *service.AuthService
 }
 
-func NewSpaceHandler(spaceService *service.SpaceService) *SpaceHandler {
+func NewSpaceHandler(spaceService *service.SpaceService, authService *service.AuthService) *SpaceHandler {
 	return &SpaceHandler{
 		spaceService: spaceService,
+		authService:  authService,
 	}
 }
 
 func (h *SpaceHandler) List(w http.ResponseWriter, r *http.Request) {
-	spaces, err := h.spaceService.List()
+	userID := middleware.GetUserID(r)
+
+	// Check if user is admin
+	isAdmin := false
+	user, err := h.authService.Me(userID)
+	if err == nil && user.Role == "admin" {
+		isAdmin = true
+	}
+
+	// Default: only show member spaces. ?all=true shows all (admin only).
+	showAll := r.URL.Query().Get("all") == "true" && isAdmin
+
+	spaces, err := h.spaceService.List(showAll, userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

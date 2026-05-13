@@ -56,8 +56,8 @@ func main() {
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
-	spaceHandler := handler.NewSpaceHandler(spaceService)
-	pageHandler := handler.NewPageHandler(pageService, spaceService)
+	spaceHandler := handler.NewSpaceHandler(spaceService, authService)
+	pageHandler := handler.NewPageHandler(pageService, spaceService, authService)
 	uploadHandler := handler.NewUploadHandler(pageService, uploadDir)
 
 	// Initialize middleware

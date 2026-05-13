@@ -6,25 +6,50 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/alwaysking/mdlibrary/internal/middleware"
 	"github.com/alwaysking/mdlibrary/internal/model"
 	"github.com/alwaysking/mdlibrary/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
 type PageHandler struct {
-	pageService *service.PageService
+	pageService  *service.PageService
 	spaceService *service.SpaceService
+	authService  *service.AuthService
 }
 
-func NewPageHandler(pageService *service.PageService, spaceService *service.SpaceService) *PageHandler {
+func NewPageHandler(pageService *service.PageService, spaceService *service.SpaceService, authService *service.AuthService) *PageHandler {
 	return &PageHandler{
-		pageService: pageService,
+		pageService:  pageService,
 		spaceService: spaceService,
+		authService:  authService,
 	}
+}
+
+// checkSpaceAccess verifies the user is a member of the given space.
+// All users (including admin) must be space members to access content.
+func (h *PageHandler) checkSpaceAccess(w http.ResponseWriter, r *http.Request, slug string) bool {
+	userID := middleware.GetUserID(r)
+
+	space, err := h.spaceService.GetBySlug(slug)
+	if err != nil {
+		http.Error(w, "Space not found", http.StatusNotFound)
+		return false
+	}
+
+	if !h.spaceService.IsSpaceMember(space.ID, userID) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return false
+	}
+
+	return true
 }
 
 func (h *PageHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 
 	tree, err := h.pageService.GetTree(slug)
 	if err != nil {
@@ -41,6 +66,9 @@ func (h *PageHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	pageIDStr := chi.URLParam(r, "id")
 
 	pageID, err := strconv.Atoi(pageIDStr)
@@ -61,6 +89,9 @@ func (h *PageHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 
 	var req model.CreatePageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -98,6 +129,9 @@ func (h *PageHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	pageIDStr := chi.URLParam(r, "id")
 
 	pageID, err := strconv.Atoi(pageIDStr)
@@ -124,6 +158,9 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	pageIDStr := chi.URLParam(r, "id")
 
 	pageID, err := strconv.Atoi(pageIDStr)
@@ -150,6 +187,9 @@ func (h *PageHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
 	pageIDStr := chi.URLParam(r, "id")
 
 	pageID, err := strconv.Atoi(pageIDStr)

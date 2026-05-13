@@ -6,7 +6,7 @@ import Breadcrumb from '../components/Editor/Breadcrumb';
 import CoverImage from '../components/Editor/CoverImage';
 import PageIcon from '../components/Editor/PageIcon';
 import PageEditor from '../components/Editor/PageEditor';
-import { MoreHorizontal, Loader2, Check } from 'lucide-react';
+import { MoreHorizontal, Loader2, Check, Lock } from 'lucide-react';
 
 // Separate component so useEffect runs in its own render cycle
 function PageNotFound({ spaceSlug }: { spaceSlug?: string }) {
@@ -106,6 +106,28 @@ export default function PageViewPage() {
   }
 
   if (error) {
+    // 403 = 无权限访问
+    if (error.includes('403') || error.includes('Forbidden')) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-notion-sidebarBg rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-notion-textSecondary" />
+            </div>
+            <h1 className="text-2xl font-bold text-notion-text mb-1">没有访问权限</h1>
+            <p className="text-notion-textSecondary text-sm mb-6">
+              你不是该空间的成员，无法访问此内容。
+            </p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-5 py-2.5 bg-notion-text text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+            >
+              返回首页
+            </button>
+          </div>
+        </div>
+      );
+    }
     return <PageNotFound spaceSlug={spaceSlug} />;
   }
 
