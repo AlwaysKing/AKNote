@@ -117,8 +117,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside className="w-[270px] bg-notion-sidebarBg h-screen flex flex-col border-r border-notion-border flex-shrink-0">
       {/* Space selector header */}
-      <div className="px-2 py-2 flex items-center justify-between">
-        <div className="flex-1">
+      <div className="px-2 py-2 flex items-center gap-1">
+        <span className="text-lg flex-shrink-0 pl-1">
+          {user?.avatar_url || '👤'}
+        </span>
+        <div className="flex-1 min-w-0">
           <SpaceSelector />
         </div>
         <button

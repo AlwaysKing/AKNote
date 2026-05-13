@@ -197,16 +197,40 @@ func (r *SpaceRepository) Delete(id int) error {
 }
 
 func (r *SpaceRepository) SyncFromFS(spaces []*model.Space) error {
+	// Build a set of slugs from filesystem
+	fsSlugs := make(map[string]bool)
 	for _, space := range spaces {
-		// Try to get existing space
+		fsSlugs[space.Slug] = true
+	}
+
+	// Remove database entries that no longer exist in filesystem
+	allSpaces, err := r.ListByUserID(0)
+	if err != nil {
+		return fmt.Errorf("failed to list spaces: %w", err)
+	}
+	for _, dbSpace := range allSpaces {
+		if !fsSlugs[dbSpace.Slug] {
+			if err := r.Delete(dbSpace.ID); err != nil {
+				return fmt.Errorf("failed to remove stale space %s: %w", dbSpace.Slug, err)
+			}
+		}
+	}
+
+	// Upsert filesystem spaces
+	for _, space := range spaces {
 		existing, err := r.GetBySlug(space.Slug)
 		if err == nil {
-			// Update if exists
-			_, err = r.Update(existing.ID, &model.UpdateSpaceRequest{
-				Name:        &space.Name,
-				Icon:        &space.Icon,
-				Description: &space.Description,
-			})
+			// Update if exists — only update Name from FS, preserve Icon/Description
+			req := &model.UpdateSpaceRequest{
+				Name: &space.Name,
+			}
+			if space.Icon != "" {
+				req.Icon = &space.Icon
+			}
+			if space.Description != "" {
+				req.Description = &space.Description
+			}
+			_, err = r.Update(existing.ID, req)
 			if err != nil {
 				return fmt.Errorf("failed to sync space %s: %w", space.Slug, err)
 			}

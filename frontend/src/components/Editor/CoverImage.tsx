@@ -318,7 +318,7 @@ export default function CoverImage({ coverUrl, spaceSlug, pageId }: CoverImagePr
       <div className="relative group">
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-notion-textSecondary hover:bg-notion-hover rounded transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 text-sm text-notion-textSecondary hover:bg-notion-hover rounded transition-colors"
         >
           <ImageIcon className="w-4 h-4" />
           添加封面

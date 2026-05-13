@@ -34,9 +34,9 @@ export default function PageIcon({ icon, spaceSlug, pageId }: PageIconProps) {
       {!icon ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-notion-textSecondary hover:bg-notion-hover rounded transition-colors"
+          className="flex items-center gap-1 px-2 py-0.5 text-sm text-notion-textSecondary hover:bg-notion-hover rounded transition-colors"
         >
-          <SmilePlus className="w-4 h-4" />
+          <SmilePlus className="w-3.5 h-3.5" />
           添加图标
         </button>
       ) : (

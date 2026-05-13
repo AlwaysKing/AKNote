@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Landmark } from 'lucide-react';
 import { useSpaceStore } from '../../stores/spaceStore';
 import { Space } from '../../api/spaces';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -39,7 +39,7 @@ export default function SpaceSelector() {
         className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-notion-hover transition-colors text-left"
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          {currentSpace?.icon && <span className="text-lg">{currentSpace.icon}</span>}
+          {currentSpace?.icon ? <span className="text-lg">{currentSpace.icon}</span> : <Landmark className="w-5 h-5 text-notion-text" />}
           <span className="font-medium text-notion-text truncate">{currentSpace?.name || '选择空间'}</span>
         </div>
         <ChevronDown className="w-4 h-4 text-notion-textSecondary flex-shrink-0" />
@@ -59,7 +59,7 @@ export default function SpaceSelector() {
                   onClick={() => handleSelectSpace(space)}
                   className="w-full flex items-center gap-2 px-3 py-2 hover:bg-notion-hover transition-colors text-left"
                 >
-                  {space.icon && <span className="text-lg">{space.icon}</span>}
+                  {space.icon ? <span className="text-lg">{space.icon}</span> : <Landmark className="w-5 h-5 text-notion-text" />}
                   <span className="text-notion-text">{space.name}</span>
                 </button>
               ))

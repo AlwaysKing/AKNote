@@ -202,29 +202,39 @@ export default function PageViewPage() {
         )}
 
         {/* Page content area */}
-        <div className={`${currentPage.full_page ? 'w-full px-24' : 'max-w-[720px] mx-auto'} w-full pb-32 relative group/page-header ${!showCover ? 'pt-[80px]' : ''}`}>
+        <div className={`${currentPage.full_page ? 'w-full px-24' : 'max-w-[720px] mx-auto'} w-full pb-32 relative group/page-header ${!showCover ? (currentPage.icon ? 'pt-[96px]' : 'pt-[64px]') : ''}`}>
 
           {/* Icon - large display, overlaps cover when cover exists (Notion: margin-top: -42px) */}
           {currentPage.icon && (
-            <div className={showCover ? 'relative -mt-[42px] mb-[40px] ml-2' : 'mb-[40px] ml-2'}>
+            <div className={showCover ? 'relative -mt-[42px] ml-2' : 'ml-2'}>
               <PageIcon
                 icon={currentPage.icon}
                 spaceSlug={spaceSlug!}
                 pageId={currentPage.id}
               />
+              {/* Add cover button in icon-title gap, only on hover, no layout impact */}
+              {!showCover && (
+                <div className="h-0 translate-y-2 -ml-2 overflow-visible opacity-0 pointer-events-none group-hover/page-header:opacity-100 group-hover/page-header:pointer-events-auto transition-opacity duration-100">
+                  <CoverImage
+                    coverUrl={currentPage.cover_url}
+                    spaceSlug={spaceSlug!}
+                    pageId={currentPage.id}
+                  />
+                </div>
+              )}
+              <div className="h-10" />
             </div>
           )}
 
-          {/* Page controls - 添加图标/添加封面 buttons, hidden by default, visible on hover (Notion: opacity 0, pointer-events none) */}
-          {(!currentPage.icon || !showCover) && (
-            <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/page-header:opacity-100 group-hover/page-header:pointer-events-auto transition-opacity duration-100 py-2">
-              {!currentPage.icon && (
-                <PageIcon
-                  icon={currentPage.icon}
-                  spaceSlug={spaceSlug!}
-                  pageId={currentPage.id}
-                />
-              )}
+          {/* Page controls - 添加图标/封面 buttons, hidden by default, visible on hover */}
+          {/* No icon: controls in flow (takes space like Notion) */}
+          {!currentPage.icon && (
+            <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/page-header:opacity-100 group-hover/page-header:pointer-events-auto transition-opacity duration-100 py-3">
+              <PageIcon
+                icon={currentPage.icon}
+                spaceSlug={spaceSlug!}
+                pageId={currentPage.id}
+              />
               {!showCover && (
                 <CoverImage
                   coverUrl={currentPage.cover_url}
