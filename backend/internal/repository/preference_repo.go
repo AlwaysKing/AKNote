@@ -86,23 +86,30 @@ func (r *PreferenceRepository) UpsertSpacePref(userID int, spaceSlug string, las
 		pageID = *lastViewedPageID
 	}
 
-	var ids []int
+	// Build JSON for INSERT value: use provided ids or default empty array
+	idsJSON := "[]"
 	if expandedPageIDs != nil {
-		ids = *expandedPageIDs
-	}
-	idsJSON, err := json.Marshal(ids)
-	if err != nil {
-		return fmt.Errorf("failed to marshal expanded page ids: %w", err)
+		b, err := json.Marshal(*expandedPageIDs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal expanded page ids: %w", err)
+		}
+		idsJSON = string(b)
 	}
 
-	_, err = r.db.Exec(`
+	// For CASE WHEN check: nil means "not provided" → NULL in SQL → preserve old value
+	var expandedCheck interface{}
+	if expandedPageIDs != nil {
+		expandedCheck = idsJSON
+	}
+
+	_, err := r.db.Exec(`
 		INSERT INTO user_space_preferences (user_id, space_slug, last_viewed_page_id, expanded_page_ids, updated_at)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id, space_slug) DO UPDATE SET
 			last_viewed_page_id = CASE WHEN ? IS NOT NULL THEN ? ELSE user_space_preferences.last_viewed_page_id END,
 			expanded_page_ids = CASE WHEN ? IS NOT NULL THEN ? ELSE user_space_preferences.expanded_page_ids END,
 			updated_at = CURRENT_TIMESTAMP
-	`, userID, spaceSlug, pageID, string(idsJSON), pageID, pageID, expandedPageIDs, string(idsJSON))
+	`, userID, spaceSlug, pageID, idsJSON, pageID, pageID, expandedCheck, idsJSON)
 	if err != nil {
 		return fmt.Errorf("failed to upsert space preference: %w", err)
 	}
