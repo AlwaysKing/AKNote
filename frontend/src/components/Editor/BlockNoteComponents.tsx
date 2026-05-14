@@ -486,15 +486,86 @@ const ToolbarSelect: React.FC<{
 };
 
 // ==================== Suggestion Menu ====================
+
+// Desired group order — must match PageEditor's customZh group names
+const GROUP_ORDER = ['基础区块', '高级区块', '列表', '媒体', '其他'];
+
 const SuggestionMenuRoot: React.FC<{
   id?: string;
   className?: string;
   children?: ReactNode;
 }> = (props) => {
   const { id, className, children } = props;
+
+  // Reorder children so groups appear in GROUP_ORDER
+  // BlockNote renders labels + items sequentially; same-group items may be split.
+  // We collect children into groups keyed by their preceding label, then re-emit in order.
+  const orderedChildren = React.useMemo(() => {
+    const childArray = React.Children.toArray(children);
+    if (childArray.length === 0) return children;
+
+    // Partition children into groups: each label starts a new group
+    const groups: { label: string; elements: React.ReactNode[] }[] = [];
+    let currentGroup = '';
+
+    for (const child of childArray) {
+      if (React.isValidElement(child)) {
+        // Detect label elements by their className
+        const props = child.props as any;
+        if (props?.className?.includes?.('bn-suggestion-menu-label')) {
+          currentGroup = (child as React.ReactElement<{ children?: ReactNode }>).props?.children?.toString() || '';
+          groups.push({ label: currentGroup, elements: [child] });
+        } else {
+          // Item — add to current group
+          if (groups.length === 0) {
+            groups.push({ label: currentGroup, elements: [child] });
+          } else {
+            groups[groups.length - 1].elements.push(child);
+          }
+        }
+      } else {
+        // Non-element child (text node etc.)
+        if (groups.length === 0) {
+          groups.push({ label: '', elements: [child] });
+        } else {
+          groups[groups.length - 1].elements.push(child);
+        }
+      }
+    }
+
+    // Merge groups with the same label, then sort by GROUP_ORDER
+    const merged = new Map<string, React.ReactNode[]>();
+    for (const g of groups) {
+      const existing = merged.get(g.label);
+      if (existing) {
+        // Skip duplicate label element, only add items
+        existing.push(...g.elements.slice(1));
+      } else {
+        merged.set(g.label, g.elements);
+      }
+    }
+
+    // Re-emit in GROUP_ORDER, then any remaining groups
+    const result: React.ReactNode[] = [];
+    const seen = new Set<string>();
+    for (const label of GROUP_ORDER) {
+      const elements = merged.get(label);
+      if (elements) {
+        result.push(...elements);
+        seen.add(label);
+      }
+    }
+    for (const [label, elements] of merged) {
+      if (!seen.has(label)) {
+        result.push(...elements);
+      }
+    }
+    return result;
+  }, [children]);
+
   return (
     <div id={id} className={className}>
-      {children}
+      {orderedChildren}
     </div>
   );
 };
@@ -527,6 +598,34 @@ const SLASH_MENU_SHORTCUTS: Record<string, string> = {
   page_break: '---',
 };
 
+// English names shown as light gray text after Chinese title
+const SLASH_MENU_ENGLISH: Record<string, string> = {
+  heading: 'Heading 1',
+  heading_2: 'Heading 2',
+  heading_3: 'Heading 3',
+  heading_4: 'Heading 4',
+  heading_5: 'Heading 5',
+  heading_6: 'Heading 6',
+  toggle_heading: 'Toggle Heading 1',
+  toggle_heading_2: 'Toggle Heading 2',
+  toggle_heading_3: 'Toggle Heading 3',
+  paragraph: 'Text',
+  bullet_list: 'Bullet List',
+  numbered_list: 'Numbered List',
+  check_list: 'To-do List',
+  toggle_list: 'Toggle',
+  quote: 'Quote',
+  code_block: 'Code',
+  divider: 'Divider',
+  table: 'Table',
+  image: 'Image',
+  video: 'Video',
+  audio: 'Audio',
+  file: 'File',
+  emoji: 'Emoji',
+  page_break: 'Page Break',
+};
+
 const SuggestionMenuItem: React.FC<{
   className?: string;
   id?: string;
@@ -536,6 +635,7 @@ const SuggestionMenuItem: React.FC<{
 }> = (props) => {
   const { className, id, isSelected, onClick, item } = props;
   const shortcut = SLASH_MENU_SHORTCUTS[item.key] || '';
+  const english = SLASH_MENU_ENGLISH[item.key] || '';
   return (
     <div
       id={id}
@@ -544,7 +644,10 @@ const SuggestionMenuItem: React.FC<{
       data-selected={isSelected || undefined}
     >
       {item.icon && <span className="bn-suggestion-menu-item-icon">{item.icon}</span>}
-      <span className="bn-suggestion-menu-item-title">{item.title || item.name}</span>
+      <span className="bn-suggestion-menu-item-title">
+        {item.title || item.name}
+        {english && <span className="bn-suggestion-menu-item-en">{english}</span>}
+      </span>
       {shortcut && <span className="bn-suggestion-menu-item-shortcut">{shortcut}</span>}
     </div>
   );

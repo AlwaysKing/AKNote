@@ -511,6 +511,14 @@ h4[contenteditable],
   margin-left: auto !important;
 }
 
+/* English subtitle — light gray after Chinese title */
+.bn-suggestion-menu .bn-suggestion-menu-item-en {
+  font-size: 12px !important;
+  color: #c4c3c0 !important;
+  margin-left: 6px !important;
+  font-weight: 400 !important;
+}
+
 /* Category labels — Notion: uppercase, small, gray */
 .bn-suggestion-menu .bn-suggestion-menu-label {
   padding: 6px 8px 2px !important;

@@ -6,6 +6,36 @@ import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
 import { blockNoteComponents, clearBlockSelection } from './BlockNoteComponents';
 
+// Override zh dictionary: reorganize groups + rename toggle headings
+const customZh = {
+  ...zh,
+  slash_menu: {
+    ...zh.slash_menu,
+    // 基础区块 — headings + toggle headings
+    heading: { ...zh.slash_menu.heading, group: '基础区块' },
+    heading_2: { ...zh.slash_menu.heading_2, group: '基础区块' },
+    heading_3: { ...zh.slash_menu.heading_3, group: '基础区块' },
+    heading_4: { ...zh.slash_menu.heading_4, group: '基础区块' },
+    heading_5: { ...zh.slash_menu.heading_5, group: '基础区块' },
+    heading_6: { ...zh.slash_menu.heading_6, group: '基础区块' },
+    toggle_heading: { ...zh.slash_menu.toggle_heading, group: '基础区块', title: '一级折叠标题' },
+    toggle_heading_2: { ...zh.slash_menu.toggle_heading_2, group: '基础区块', title: '二级折叠标题' },
+    toggle_heading_3: { ...zh.slash_menu.toggle_heading_3, group: '基础区块', title: '三级折叠标题' },
+    // 高级区块 — code, quote, divider, table
+    quote: { ...zh.slash_menu.quote, group: '高级区块' },
+    code_block: { ...zh.slash_menu.code_block, group: '高级区块' },
+    divider: { ...zh.slash_menu.divider, group: '高级区块' },
+    table: { ...zh.slash_menu.table, group: '高级区块' },
+    // 列表 — toggle, numbered, bullet, check, paragraph
+    toggle_list: { ...zh.slash_menu.toggle_list, group: '列表' },
+    numbered_list: { ...zh.slash_menu.numbered_list, group: '列表' },
+    bullet_list: { ...zh.slash_menu.bullet_list, group: '列表' },
+    check_list: { ...zh.slash_menu.check_list, group: '列表' },
+    paragraph: { ...zh.slash_menu.paragraph, group: '列表' },
+    // 媒体 and 其他 keep original groups
+  },
+};
+
 interface PageEditorProps {
   initialContent: string;
   onSave: (content: string) => void | Promise<void>;
@@ -21,7 +51,7 @@ export function PageEditor({ initialContent, onSave, onSyncStatusChange, readOnl
 
   const editor: BlockNoteEditor = useCreateBlockNote({
     initialContent: markdownToBlocks(initialContent),
-    dictionary: zh,
+    dictionary: customZh as any,
   });
 
   const triggerSave = useCallback(async () => {
