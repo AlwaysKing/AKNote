@@ -135,10 +135,7 @@ export default function PageViewPage() {
 
   if (!currentPage) {
     // Not loading, no error, but no page — page was deleted or doesn't exist
-    if (spaceSlug) {
-      navigate(`/s/${spaceSlug}`, { replace: true });
-    }
-    return null;
+    return <PageNotFound spaceSlug={spaceSlug} />;
   }
 
   const showCover = !!currentPage.cover_url;
