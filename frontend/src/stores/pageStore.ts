@@ -100,6 +100,6 @@ export const usePageStore = create<PageState>((set) => ({
 
   refreshPageTree: async () => {
     const { useSpaceStore } = await import('./spaceStore');
-    await useSpaceStore.getState().refreshPageTree();
+    await useSpaceStore.getState().refreshAll();
   },
 }));

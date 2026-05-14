@@ -151,5 +151,9 @@ func OpenSpaceDB(spaceDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create pages table: %w", err)
 	}
 
+	// Migrate: add is_starred and last_accessed_at columns if missing
+	db.Exec("ALTER TABLE pages ADD COLUMN is_starred BOOLEAN DEFAULT 0")
+	db.Exec("ALTER TABLE pages ADD COLUMN last_accessed_at DATETIME")
+
 	return db, nil
 }

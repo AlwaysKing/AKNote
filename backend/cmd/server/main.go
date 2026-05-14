@@ -108,6 +108,8 @@ func main() {
 
 		// Pages
 		r.Get("/api/spaces/{slug}/pages", pageHandler.GetTree)
+			r.Get("/api/spaces/{slug}/pages/starred", pageHandler.ListStarred)
+			r.Get("/api/spaces/{slug}/pages/recent", pageHandler.ListRecent)
 		r.Get("/api/spaces/{slug}/pages/{id}", pageHandler.GetByID)
 		r.Post("/api/spaces/{slug}/pages", pageHandler.Create)
 		r.Put("/api/spaces/{slug}/pages/{id}", pageHandler.Update)

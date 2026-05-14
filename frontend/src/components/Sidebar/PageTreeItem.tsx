@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronRight, FileText, MoreHorizontal, Plus, Trash2, Edit3 } from 'lucide-react';
+import { ChevronRight, FileText, MoreHorizontal, Plus, Trash2, Edit3, Star } from 'lucide-react';
 import { Page } from '../../api/pages';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { usePageStore } from '../../stores/pageStore';
+import { useSpaceStore } from '../../stores/spaceStore';
 
 interface PageTreeItemProps {
   page: Page;
@@ -98,34 +99,48 @@ export default function PageTreeItem({ page, level }: PageTreeItemProps) {
     setIsRenaming(false);
   };
 
+  const handleToggleStar = async () => {
+    if (!spaceSlug) return;
+    setShowMenu(false);
+    try {
+      await updateMetadata(spaceSlug, page.id, { is_starred: !page.is_starred });
+      await refreshPageTree();
+      useSpaceStore.getState().fetchStarred(spaceSlug);
+    } catch (err) {
+      console.error('Failed to toggle star:', err);
+    }
+  };
+
   return (
     <div>
       <div
-        className={`w-full flex items-center gap-1 h-[30px] px-3 rounded hover:bg-notion-hover transition-colors text-left group ${
+        className={`w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left group ${
           isActive ? 'bg-notion-hover' : ''
         }`}
-        style={{ paddingLeft: `${level * 16 + 12}px`, paddingRight: '8px' }}
+        style={{ paddingLeft: `${level * 16 + 16}px`, paddingRight: '8px' }}
       >
         {/* Icon/Chevron — shared position: icon by default, chevron on hover */}
         {page.icon ? (
           <button
             onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-            className="w-5 h-5 flex items-center justify-center flex-shrink-0 hover:bg-notion-border rounded transition-colors group/icon"
+            className="flex items-center justify-center flex-shrink-0 mr-2 hover:bg-notion-border rounded transition-colors group/icon"
+            style={{ width: '22px', height: '18px' }}
           >
             {(page.icon.startsWith('/') || page.icon.startsWith('http')) ? (
-              <img src={page.icon} alt="" className="w-4 h-4 object-contain group-hover/icon:hidden" />
+              <img src={page.icon} alt="" className="w-[18px] h-[18px] object-contain group-hover/icon:hidden" />
             ) : (
-              <span className="text-sm group-hover/icon:hidden">{page.icon}</span>
+              <span className="text-[18px] leading-none group-hover/icon:hidden" style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"' }}>{page.icon}</span>
             )}
-            <ChevronRight className={`w-4 h-4 text-notion-textSecondary hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
         ) : (
           <button
             onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-            className="w-5 h-5 flex items-center justify-center flex-shrink-0 hover:bg-notion-border rounded transition-colors group/icon"
+            className="flex items-center justify-center flex-shrink-0 mr-2 hover:bg-notion-border rounded transition-colors group/icon"
+            style={{ width: '22px', height: '18px' }}
           >
-            <FileText className="w-4 h-4 text-notion-textSecondary group-hover/icon:hidden" />
-            <ChevronRight className={`w-4 h-4 text-notion-textSecondary hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+            <FileText className="w-[18px] h-[18px] text-[#91918e] group-hover/icon:hidden" strokeWidth={1.7} />
+            <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           </button>
         )}
 
@@ -146,7 +161,7 @@ export default function PageTreeItem({ page, level }: PageTreeItemProps) {
         ) : (
           <span
             onClick={handleClick}
-            className="text-sm font-medium text-notion-text truncate flex-1 cursor-pointer"
+            className={`text-sm font-medium truncate flex-1 cursor-pointer ${isActive ? 'text-notion-text' : 'text-notion-sidebarText'}`}
           >
             {page.title || '未命名页面'}
           </span>
@@ -155,18 +170,18 @@ export default function PageTreeItem({ page, level }: PageTreeItemProps) {
         {/* Quick add sub-page button */}
         <button
           onClick={(e) => { e.stopPropagation(); handleAddSubPage(); }}
-          className="p-0.5 hover:bg-notion-border rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+          className="flex items-center justify-center w-5 h-5 hover:bg-notion-border rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
           title="添加子页面"
         >
-          <Plus className="w-4 h-4 text-notion-textSecondary" />
+          <Plus className="w-4 h-4 text-[#8e8b86]" />
         </button>
 
         {/* More menu button */}
         <button
           onClick={openMenu}
-          className="p-0.5 hover:bg-notion-border rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+          className="flex items-center justify-center w-5 h-5 hover:bg-notion-border rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 ml-1"
         >
-          <MoreHorizontal className="w-4 h-4 text-notion-textSecondary" />
+          <MoreHorizontal className="w-4 h-4 text-[#8e8b86]" />
         </button>
       </div>
 
@@ -178,6 +193,13 @@ export default function PageTreeItem({ page, level }: PageTreeItemProps) {
           style={{ top: menuPos.top, left: menuPos.left }}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            onClick={handleToggleStar}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+          >
+            <Star className={`w-4 h-4 ${page.is_starred ? 'fill-yellow-400 text-yellow-400' : 'text-notion-textSecondary'}`} />
+            {page.is_starred ? '取消收藏' : '添加收藏'}
+          </button>
           <button
             onClick={handleAddSubPage}
             className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"

@@ -13,6 +13,8 @@ type Page struct {
 	IconLarge   bool      `json:"icon_large" db:"-"`
 	CoverOffset int       `json:"cover_offset" db:"-"`
 	SortOrder   float64   `json:"sort_order" db:"sort_order"`
+	IsStarred     bool       `json:"is_starred" db:"is_starred"`
+	LastAccessedAt *time.Time `json:"last_accessed_at,omitempty" db:"last_accessed_at"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 	Content   string    `json:"content,omitempty"`
@@ -47,4 +49,5 @@ type UpdatePageMetaRequest struct {
 	IconLarge   *bool    `json:"icon_large"`
 	CoverOffset *int     `json:"cover_offset"`
 	SortOrder   *float64 `json:"sort_order"`
+	IsStarred   *bool    `json:"is_starred"`
 }

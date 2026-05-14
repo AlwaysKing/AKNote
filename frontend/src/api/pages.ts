@@ -11,6 +11,8 @@ export interface Page {
   icon_large?: boolean;
   cover_offset?: number;
   sort_order: number;
+  is_starred?: boolean;
+  last_accessed_at?: string;
   created_at: string;
   updated_at: string;
   content?: string;
@@ -30,6 +32,7 @@ export interface PageMetadata {
   icon_large?: boolean;
   cover_offset?: number;
   sort_order?: number;
+  is_starred?: boolean;
 }
 
 export interface TrashedItem {
@@ -81,5 +84,16 @@ export const pagesApi = {
 
   permanentDelete: async (spaceSlug: string, trashPath: string): Promise<void> => {
     await apiClient.post(`/spaces/${spaceSlug}/trash/delete`, { trash_path: trashPath });
+  },
+
+  listStarred: async (spaceSlug: string): Promise<Page[]> => {
+    const response = await apiClient.get<Page[]>(`/spaces/${spaceSlug}/pages/starred`);
+    return response.data;
+  },
+
+  listRecent: async (spaceSlug: string, limit?: number): Promise<Page[]> => {
+    const params = limit ? { limit } : {};
+    const response = await apiClient.get<Page[]>(`/spaces/${spaceSlug}/pages/recent`, { params });
+    return response.data;
   },
 };

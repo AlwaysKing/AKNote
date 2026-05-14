@@ -23,10 +23,13 @@ export default function NewPageButton() {
     <button
       onClick={handleNewPage}
       disabled={!currentSpace}
-      className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-notion-hover transition-colors text-left text-notion-textSecondary disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{ paddingLeft: '16px', paddingRight: '8px' }}
     >
-      <Plus className="w-4 h-4" />
-      <span className="text-sm">新建页面</span>
+      <span className="flex items-center justify-center flex-shrink-0 mr-2" style={{ width: '22px', height: '18px' }}>
+        <Plus className="w-[18px] h-[18px] text-[#91918e]" strokeWidth={1.7} />
+      </span>
+      <span className="text-sm font-medium text-notion-sidebarText">新建页面</span>
     </button>
   );
 }

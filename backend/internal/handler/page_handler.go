@@ -240,3 +240,44 @@ func (h *PageHandler) ServeAsset(w http.ResponseWriter, r *http.Request) {
 
 	http.ServeFile(w, r, filePath)
 }
+
+// ListStarred handles GET /api/spaces/{slug}/pages/starred
+func (h *PageHandler) ListStarred(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
+
+	pages, err := h.pageService.ListStarred(slug)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pages)
+}
+
+// ListRecent handles GET /api/spaces/{slug}/pages/recent
+func (h *PageHandler) ListRecent(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
+
+	limit := 10
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	pages, err := h.pageService.ListRecent(slug, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pages)
+}

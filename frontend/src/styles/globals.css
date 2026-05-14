@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply bg-notion-bg text-notion-text antialiased;
+    @apply bg-notion-bg text-notion-text;
     font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI', 'Helvetica', 'Arial', sans-serif;
   }
 
@@ -581,24 +581,6 @@ h4[contenteditable],
 /* ============================================
    Sidebar Page Tree - Notion-like Styles
    ============================================ */
-
-/* Sidebar page tree item text */
-[data-page-tree] .cursor-pointer.truncate {
-  line-height: 30px;
-  color: #5f5e59;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* Hover state - show primary text color */
-[data-page-tree] .group:hover .cursor-pointer.truncate {
-  color: #37352f;
-}
-
-/* Active page item - show primary text color */
-[data-page-tree] .bg-notion-hover .cursor-pointer.truncate {
-  color: #37352f;
-}
 
 /* ============================================
    Block Selection - Notion-like Styles

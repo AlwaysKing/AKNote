@@ -346,7 +346,13 @@ func (s *PageService) GetByID(spaceSlug string, pageID int) (*model.Page, error)
 	if fm.CoverOffset != nil {
 		page.CoverOffset = *fm.CoverOffset
 	}
+	if fm.Starred != nil {
+		page.IsStarred = *fm.Starred
+	}
 	page.Content = body
+
+	// Track page access for "recent" feature
+	repo.TouchAccess(pageID)
 
 	return page, nil
 }
@@ -484,6 +490,9 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID int, req *model.Update
 	}
 	if req.CoverOffset != nil {
 		fm.CoverOffset = req.CoverOffset
+	}
+	if req.IsStarred != nil {
+		fm.Starred = req.IsStarred
 	}
 
 	if req.Title != nil && *req.Title != "" && *req.Title != page.Title {
@@ -772,4 +781,25 @@ func (s *PageService) PermanentDelete(spaceSlug string, trashRelPath string) err
 		os.RemoveAll(trashChildDir)
 	}
 	return nil
+}
+
+// ListStarred returns all starred pages for a space
+func (s *PageService) ListStarred(spaceSlug string) ([]*model.Page, error) {
+	repo, err := s.getRepo(spaceSlug)
+	if err != nil {
+		return nil, err
+	}
+	return repo.ListStarred()
+}
+
+// ListRecent returns recently accessed pages for a space
+func (s *PageService) ListRecent(spaceSlug string, limit int) ([]*model.Page, error) {
+	repo, err := s.getRepo(spaceSlug)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	return repo.ListRecent(limit)
 }

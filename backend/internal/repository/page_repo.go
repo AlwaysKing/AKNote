@@ -16,6 +16,33 @@ func NewPageRepository(db *sql.DB) *PageRepository {
 	return &PageRepository{db: db}
 }
 
+const pageColumns = `id, title, file_path, icon, cover_url, full_page, sort_order, is_starred, last_accessed_at, created_at, updated_at`
+
+func scanPage(scanner interface{ Scan(...interface{}) error }) (*model.Page, error) {
+	var page model.Page
+	var icon, coverURL sql.NullString
+	var lastAccessed sql.NullTime
+	err := scanner.Scan(
+		&page.ID, &page.Title, &page.FilePath,
+		&icon, &coverURL, &page.FullPage, &page.SortOrder,
+		&page.IsStarred, &lastAccessed,
+		&page.CreatedAt, &page.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if icon.Valid {
+		page.Icon = icon.String
+	}
+	if coverURL.Valid {
+		page.CoverURL = coverURL.String
+	}
+	if lastAccessed.Valid {
+		page.LastAccessedAt = &lastAccessed.Time
+	}
+	return &page, nil
+}
+
 func (r *PageRepository) Create(page *model.Page) (*model.Page, error) {
 	query := `
 		INSERT INTO pages (title, file_path, icon, cover_url, sort_order)
@@ -37,73 +64,33 @@ func (r *PageRepository) Create(page *model.Page) (*model.Page, error) {
 }
 
 func (r *PageRepository) GetByID(id int) (*model.Page, error) {
-	query := `
-		SELECT id, title, file_path, icon, cover_url, full_page, sort_order, created_at, updated_at
-		FROM pages WHERE id = ?
-	`
+	query := `SELECT ` + pageColumns + ` FROM pages WHERE id = ?`
 
-	var page model.Page
-	var icon, coverURL sql.NullString
-	err := r.db.QueryRow(query, id).Scan(
-		&page.ID, &page.Title, &page.FilePath,
-		&icon, &coverURL, &page.FullPage, &page.SortOrder,
-		&page.CreatedAt, &page.UpdatedAt,
-	)
-
-	if icon.Valid {
-		page.Icon = icon.String
-	}
-	if coverURL.Valid {
-		page.CoverURL = coverURL.String
-	}
-
+	page, err := scanPage(r.db.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("page not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get page: %w", err)
 	}
-
-	return &page, nil
+	return page, nil
 }
 
 func (r *PageRepository) GetByPath(filePath string) (*model.Page, error) {
-	query := `
-		SELECT id, title, file_path, icon, cover_url, full_page, sort_order, created_at, updated_at
-		FROM pages WHERE file_path = ?
-	`
+	query := `SELECT ` + pageColumns + ` FROM pages WHERE file_path = ?`
 
-	var page model.Page
-	var icon, coverURL sql.NullString
-	err := r.db.QueryRow(query, filePath).Scan(
-		&page.ID, &page.Title, &page.FilePath,
-		&icon, &coverURL, &page.FullPage, &page.SortOrder,
-		&page.CreatedAt, &page.UpdatedAt,
-	)
-
+	page, err := scanPage(r.db.QueryRow(query, filePath))
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("page not found")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get page: %w", err)
 	}
-
-	if icon.Valid {
-		page.Icon = icon.String
-	}
-	if coverURL.Valid {
-		page.CoverURL = coverURL.String
-	}
-
-	return &page, nil
+	return page, nil
 }
 
 func (r *PageRepository) ListAll() ([]*model.Page, error) {
-	query := `
-		SELECT id, title, file_path, icon, cover_url, full_page, sort_order, created_at, updated_at
-		FROM pages
-		ORDER BY sort_order ASC, created_at ASC
-	`
+	query := `SELECT ` + pageColumns + ` FROM pages ORDER BY sort_order ASC, created_at ASC`
 
 	rows, err := r.db.Query(query)
 	if err != nil {
@@ -113,24 +100,11 @@ func (r *PageRepository) ListAll() ([]*model.Page, error) {
 
 	var pages []*model.Page
 	for rows.Next() {
-		var page model.Page
-		var icon, coverURL sql.NullString
-		if err := rows.Scan(
-			&page.ID, &page.Title, &page.FilePath,
-			&icon, &coverURL, &page.FullPage, &page.SortOrder,
-			&page.CreatedAt, &page.UpdatedAt,
-		); err != nil {
+		page, err := scanPage(rows)
+		if err != nil {
 			return nil, fmt.Errorf("failed to scan page: %w", err)
 		}
-
-		if icon.Valid {
-			page.Icon = icon.String
-		}
-		if coverURL.Valid {
-			page.CoverURL = coverURL.String
-		}
-
-		pages = append(pages, &page)
+		pages = append(pages, page)
 	}
 
 	return pages, nil
@@ -176,6 +150,10 @@ func (r *PageRepository) UpdateMeta(id int, req *model.UpdatePageMetaRequest) (*
 		setParts = append(setParts, "sort_order = ?")
 		args = append(args, *req.SortOrder)
 	}
+	if req.IsStarred != nil {
+		setParts = append(setParts, "is_starred = ?")
+		args = append(args, *req.IsStarred)
+	}
 	setParts = append(setParts, "updated_at = CURRENT_TIMESTAMP")
 
 	query := "UPDATE pages SET " + strings.Join(setParts, ", ") + " WHERE id = ?"
@@ -212,4 +190,52 @@ func (r *PageRepository) Delete(id int) error {
 	}
 
 	return nil
+}
+
+// TouchAccess updates last_accessed_at to now for a page (tracks recent access)
+func (r *PageRepository) TouchAccess(id int) error {
+	_, err := r.db.Exec("UPDATE pages SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+	return err
+}
+
+// ListStarred returns all starred pages
+func (r *PageRepository) ListStarred() ([]*model.Page, error) {
+	query := `SELECT ` + pageColumns + ` FROM pages WHERE is_starred = 1 ORDER BY title ASC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list starred pages: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []*model.Page
+	for rows.Next() {
+		page, err := scanPage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan page: %w", err)
+		}
+		pages = append(pages, page)
+	}
+	return pages, nil
+}
+
+// ListRecent returns pages ordered by last access time (most recent first)
+func (r *PageRepository) ListRecent(limit int) ([]*model.Page, error) {
+	query := `SELECT ` + pageColumns + ` FROM pages WHERE last_accessed_at IS NOT NULL ORDER BY last_accessed_at DESC LIMIT ?`
+
+	rows, err := r.db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list recent pages: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []*model.Page
+	for rows.Next() {
+		page, err := scanPage(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan page: %w", err)
+		}
+		pages = append(pages, page)
+	}
+	return pages, nil
 }
