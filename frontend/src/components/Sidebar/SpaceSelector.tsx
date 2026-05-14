@@ -54,13 +54,13 @@ export default function SpaceSelector() {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute left-0 top-full mt-1 w-full bg-white border border-notion-border rounded-lg shadow-lg z-20 max-h-96 overflow-auto">
+          <div className="absolute left-0 top-full mt-1 w-full bg-white border border-notion-border rounded-lg shadow-lg z-20 max-h-96 overflow-auto py-1.5 px-1.5">
             {spaces.length > 0 ? (
               spaces.map((space) => (
                 <button
                   key={space.id}
                   onClick={() => handleSelectSpace(space)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-notion-hover transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-notion-hover rounded-md transition-colors text-left"
                 >
                   {space.icon ? <span className="text-lg">{space.icon}</span> : <Landmark className="w-5 h-5 text-notion-text" />}
                   <span className="text-notion-text">{space.name}</span>

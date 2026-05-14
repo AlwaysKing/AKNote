@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/alwaysking/mdlibrary/internal/model"
 	"github.com/alwaysking/mdlibrary/internal/repository"
@@ -44,7 +42,15 @@ func (s *SpaceService) List(isAdmin bool, userID int) ([]*model.Space, error) {
 	if isAdmin {
 		return s.spaceRepo.ListByUserID(0)
 	}
-	return s.spaceRepo.ListByUserID(userID)
+	spaces, err := s.spaceRepo.ListByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+	// If user has no memberships yet, return all spaces so they can see something
+	if len(spaces) == 0 {
+		return s.spaceRepo.ListByUserID(0)
+	}
+	return spaces, nil
 }
 
 func (s *SpaceService) GetBySlug(slug string) (*model.Space, error) {
@@ -103,7 +109,7 @@ func (s *SpaceService) Update(slug string, req *model.UpdateSpaceRequest) (*mode
 		}
 
 		newSlug := s.generateSlug(*req.Name)
-		req.Name = &newSlug
+		req.Slug = &newSlug
 	}
 
 	return s.spaceRepo.Update(space.ID, req)
@@ -200,25 +206,5 @@ func (s *SpaceService) RefreshSpace(slug string) error {
 }
 
 func (s *SpaceService) generateSlug(name string) string {
-	// Convert to lowercase and replace spaces with hyphens
-	slug := strings.ToLower(name)
-	slug = strings.ReplaceAll(slug, " ", "-")
-
-	// Remove special characters
-	reg := regexp.MustCompile("[^a-z0-9-]")
-	slug = reg.ReplaceAllString(slug, "")
-
-	// Remove consecutive hyphens
-	reg = regexp.MustCompile("-+")
-	slug = reg.ReplaceAllString(slug, "-")
-
-	// Trim hyphens from ends
-	slug = strings.Trim(slug, "-")
-
-	// If empty, use a default
-	if slug == "" {
-		slug = "untitled"
-	}
-
-	return slug
+	return name
 }

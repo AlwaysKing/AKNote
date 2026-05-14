@@ -1,11 +1,12 @@
-import { Settings, ChevronsLeft, Trash2, ArrowLeft, Users, Database, LogOut, User, Image, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, ChevronsLeft, Trash2, ArrowLeft, Users, Database, LogOut, User, Image, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SpaceSelector from '../Sidebar/SpaceSelector';
 import PageTree from '../Sidebar/PageTree';
+import PageTreeItem from '../Sidebar/PageTreeItem';
 import NewPageButton from '../Sidebar/NewPageButton';
 import { useAuthStore } from '../../stores/authStore';
 import { useSpaceStore } from '../../stores/spaceStore';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -20,6 +21,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = location.pathname.startsWith('/admin');
   const isAdminRole = user?.role === 'admin';
   const adminTab = new URLSearchParams(location.search).get('tab') || (isAdminRole ? 'users' : 'profile');
+
+  const { starredPages, recentPages } = useSpaceStore();
+  const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
+  const [sidebarExpandedIds, setSidebarExpandedIds] = useState<Set<number>>(new Set());
+  const [showAllRecent, setShowAllRecent] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const logoutRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showLogoutConfirm) return;
+    const handler = (e: MouseEvent) => {
+      if (logoutRef.current && !logoutRef.current.contains(e.target as Node)) {
+        setShowLogoutConfirm(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showLogoutConfirm]);
 
   const handleAdminBack = () => {
     const slug = currentSpace?.slug || useSpaceStore.getState().spaces[0]?.slug;
@@ -96,73 +115,65 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </button>
         </nav>
         <div className="mt-auto border-t border-notion-border/60 mx-2 pb-2">
-          <button
-            onClick={() => { useAuthStore.getState().logout(); navigate('/login'); }}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm text-notion-text hover:bg-notion-hover transition-colors mt-1"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>退出登录</span>
-          </button>
+          <div className="relative mt-1" ref={logoutRef}>
+            {showLogoutConfirm && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-notion-border rounded-lg shadow-lg py-1.5 px-1.5 z-50">
+                <div className="text-xs text-notion-textSecondary px-2 py-1">确认退出登录？</div>
+                <div className="flex gap-1 px-1">
+                  <button
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 text-xs px-2 py-1 rounded-md hover:bg-notion-hover transition-colors text-notion-text"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => { setShowLogoutConfirm(false); useAuthStore.getState().logout(); navigate('/login'); }}
+                    className="flex-1 text-xs px-2 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  >
+                    退出
+                  </button>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>退出登录</span>
+            </button>
+          </div>
         </div>
       </aside>
     );
   }
 
-  const { starredPages, recentPages } = useSpaceStore();
-  const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
+  const handleSidebarToggleExpand = (pageId: number, expanded: boolean) => {
+    setSidebarExpandedIds(prev => {
+      const next = new Set(prev);
+      if (expanded) next.add(pageId); else next.delete(pageId);
+      return next;
+    });
+  };
 
   const toggleSection = (key: string) => {
     setSectionsCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const formatRelativeTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return '刚刚';
-    if (diffMin < 60) return `${diffMin}分钟前`;
-    const diffHour = Math.floor(diffMin / 60);
-    if (diffHour < 24) return `${diffHour}小时前`;
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffDay < 30) return `${diffDay}天前`;
-    return date.toLocaleDateString();
-  };
-
   const SectionHeader = ({ title, sectionKey }: { title: string; sectionKey: string }) => (
     <button
       onClick={() => toggleSection(sectionKey)}
-      className="w-full flex items-center h-[30px] px-2 rounded-md hover:bg-notion-hover transition-colors"
+      className="w-full flex items-center h-[30px] px-2 rounded-md hover:bg-notion-hover transition-colors group"
     >
-      {sectionsCollapsed[sectionKey] ? (
-        <ChevronRight className="w-3 h-3 text-notion-sidebarSecHeader mr-1" />
-      ) : (
-        <ChevronDown className="w-3 h-3 text-notion-sidebarSecHeader mr-1" />
-      )}
       <span className="text-xs font-medium leading-none text-notion-sidebarSecHeader">{title}</span>
-    </button>
-  );
-
-  const SimplePageItem = ({ page, suffix }: { page: { id: number; title: string; icon?: string; is_starred?: boolean; last_accessed_at?: string }; suffix?: string }) => (
-    <div
-      onClick={() => navigate(`/s/${currentSpace?.slug}/p/${page.id}`)}
-      className="w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left cursor-pointer group"
-      style={{ paddingLeft: '16px', paddingRight: '8px' }}
-    >
-      <span className="flex items-center justify-center flex-shrink-0 mr-2 text-notion-sidebarText" style={{ width: '22px', height: '18px' }}>
-        {page.icon ? (
-          <span className="text-[18px] leading-none" style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"' }}>{page.icon}</span>
+      <span className="flex-shrink-0 ml-1 opacity-0 group-hover:opacity-100">
+        {sectionsCollapsed[sectionKey] ? (
+          <ChevronRight className="w-3 h-3 text-notion-sidebarSecHeader" />
         ) : (
-          <FileText className="w-[18px] h-[18px] text-[#91918e]" strokeWidth={1.7} />
+          <ChevronDown className="w-3 h-3 text-notion-sidebarSecHeader" />
         )}
       </span>
-      <span className="text-sm font-medium text-notion-sidebarText truncate flex-1">{page.title || '未命名页面'}</span>
-      {suffix && (
-        <span className="text-xs text-notion-textSecondary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          {suffix}
-        </span>
-      )}
-    </div>
+    </button>
   );
 
   return (
@@ -195,9 +206,23 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 {recentPages.length === 0 ? (
                   <div className="text-xs text-notion-textSecondary px-2 py-1.5">暂无最近访问</div>
                 ) : (
-                  recentPages.map(p => (
-                    <SimplePageItem key={p.id} page={p} suffix={p.last_accessed_at ? formatRelativeTime(p.last_accessed_at) : undefined} />
-                  ))
+                  <>
+                    {(showAllRecent ? recentPages.slice(0, 20) : recentPages.slice(0, 5)).map(p => (
+                      <PageTreeItem key={p.id} page={p} level={0} expandedPageIds={sidebarExpandedIds} onToggleExpand={handleSidebarToggleExpand} />
+                    ))}
+                    {!showAllRecent && recentPages.length > 5 && (
+                      <button
+                        onClick={() => setShowAllRecent(true)}
+                        className="w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left"
+                        style={{ paddingLeft: '16px', paddingRight: '8px' }}
+                      >
+                        <span className="flex items-center justify-center flex-shrink-0 mr-2" style={{ width: '22px', height: '18px' }}>
+                          <span className="text-sm font-medium text-notion-textSecondary">…</span>
+                        </span>
+                        <span className="text-sm font-medium text-notion-textSecondary">显示更多</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -214,7 +239,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   <div className="text-xs text-notion-textSecondary px-2 py-1.5">暂无收藏页面</div>
                 ) : (
                   starredPages.map(p => (
-                    <SimplePageItem key={p.id} page={p} />
+                    <PageTreeItem key={p.id} page={p} level={0} expandedPageIds={sidebarExpandedIds} onToggleExpand={handleSidebarToggleExpand} />
                   ))
                 )}
               </div>

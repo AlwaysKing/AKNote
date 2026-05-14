@@ -156,6 +156,10 @@ func (r *SpaceRepository) Update(id int, req *model.UpdateSpaceRequest) (*model.
 		setParts = append(setParts, "name = ?")
 		args = append(args, *req.Name)
 	}
+	if req.Slug != nil {
+		setParts = append(setParts, "slug = ?")
+		args = append(args, *req.Slug)
+	}
 	if req.Icon != nil {
 		setParts = append(setParts, "icon = ?")
 		args = append(args, *req.Icon)

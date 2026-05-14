@@ -20,6 +20,7 @@ type CreateSpaceRequest struct {
 
 type UpdateSpaceRequest struct {
 	Name        *string `json:"name"`
+	Slug        *string `json:"slug"`
 	Icon        *string `json:"icon"`
 	Description *string `json:"description"`
 }

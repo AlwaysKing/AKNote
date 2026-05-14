@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import AppLayout from './components/Layout/AppLayout';
@@ -14,6 +14,7 @@ import { usePreferenceStore } from './stores/preferenceStore';
 
 function HomeRedirect() {
   const { isAuthenticated } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -28,15 +29,15 @@ function HomeRedirect() {
           ? spaces.find((s: { slug: string }) => s.slug === lastSlug)
           : null;
         if (targetSpace) {
-          window.location.href = `/s/${targetSpace.slug}`;
+          navigate(`/s/${targetSpace.slug}`, { replace: true });
         } else if (spaces.length > 0) {
-          window.location.href = `/s/${spaces[0].slug}`;
+          navigate(`/s/${spaces[0].slug}`, { replace: true });
         } else {
-          window.location.href = '/welcome';
+          navigate('/welcome', { replace: true });
         }
       });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, navigate]);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -54,8 +55,13 @@ function App() {
 
   useEffect(() => {
     useAuthStore.getState().initialize();
-    usePreferenceStore.getState().fetchPreferences();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      usePreferenceStore.getState().fetchPreferences();
+    }
+  }, [isAuthenticated]);
 
   return (
     <BrowserRouter>

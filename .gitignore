@@ -2,7 +2,8 @@ node_modules/
 dist/
 *.db
 .DS_Store
-data/data.db
+data/
+docs/
 frontend/node_modules/
 frontend/dist/
 backend/backend

@@ -35,6 +35,7 @@ export default function PageViewPage() {
         setCurrentSpace(space);
       }
       usePreferenceStore.getState().setLastViewedPage(spaceSlug, parseInt(pageId));
+      useSpaceStore.getState().fetchRecent(spaceSlug);
     }
   }, [spaceSlug, pageId, fetchPage, setCurrentSpace]);
 

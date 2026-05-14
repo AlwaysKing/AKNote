@@ -42,6 +42,8 @@ export default function AdminPage() {
   const [showUserRoleDropdown, setShowUserRoleDropdown] = useState(false);
   const [showUserAvatarPicker, setShowUserAvatarPicker] = useState(false);
   const userAvatarPickerRef = useRef<HTMLDivElement>(null);
+  const [listAvatarPickerUserId, setListAvatarPickerUserId] = useState<number | null>(null);
+  const listAvatarPickerRef = useRef<HTMLDivElement>(null);
   const [showUserPasswordPanel, setShowUserPasswordPanel] = useState(false);
   const [passwordTargetUserId, setPasswordTargetUserId] = useState<number | null>(null);
   const [userNewPassword, setUserNewPassword] = useState('');
@@ -105,7 +107,7 @@ export default function AdminPage() {
 
   // ---- 图标选择器点击外部关闭 ----
   useEffect(() => {
-    if (!showIconPicker && !showAvatarPicker && !showUserAvatarPicker) return;
+    if (!showIconPicker && !showAvatarPicker && !showUserAvatarPicker && listAvatarPickerUserId === null) return;
     const handler = (e: MouseEvent) => {
       if (iconPickerRef.current && !iconPickerRef.current.contains(e.target as Node)) {
         setShowIconPicker(false);
@@ -116,10 +118,13 @@ export default function AdminPage() {
       if (userAvatarPickerRef.current && !userAvatarPickerRef.current.contains(e.target as Node)) {
         setShowUserAvatarPicker(false);
       }
+      if (listAvatarPickerRef.current && !listAvatarPickerRef.current.contains(e.target as Node)) {
+        setListAvatarPickerUserId(null);
+      }
     };
     const timer = setTimeout(() => document.addEventListener('mousedown', handler), 0);
     return () => { clearTimeout(timer); document.removeEventListener('mousedown', handler); };
-  }, [showIconPicker, showAvatarPicker]);
+  }, [showIconPicker, showAvatarPicker, listAvatarPickerUserId]);
 
   // ---- 自定义下拉菜单点击外部关闭 ----
   useEffect(() => {
@@ -813,10 +818,40 @@ export default function AdminPage() {
                 <tr className="hover:bg-notion-hover transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 flex items-center justify-center overflow-hidden">
-                        {user.avatar_url
-                          ? (user.avatar_url.startsWith('http') ? <img src={user.avatar_url} alt={user.display_name} className="w-8 h-8" /> : <span className="text-lg">{user.avatar_url}</span>)
-                          : <span className="text-lg">👤</span>}
+                      <div className="relative" ref={listAvatarPickerUserId === user.id ? listAvatarPickerRef : undefined}>
+                        <button
+                          onClick={() => setListAvatarPickerUserId(listAvatarPickerUserId === user.id ? null : user.id)}
+                          className="w-8 h-8 flex items-center justify-center overflow-hidden rounded hover:border hover:border-notion-border transition-colors cursor-pointer"
+                          title="更换头像"
+                        >
+                          {user.avatar_url
+                            ? (user.avatar_url.startsWith('http') ? <img src={user.avatar_url} alt={user.display_name} className="w-8 h-8" /> : <span className="text-lg">{user.avatar_url}</span>)
+                            : <span className="text-lg">👤</span>}
+                        </button>
+                        {listAvatarPickerUserId === user.id && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-notion-border rounded-lg shadow-lg p-2 z-50 w-[260px]">
+                            <div className="grid grid-cols-8 gap-1">
+                              {ICON_OPTIONS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      const updated = await usersApi.update(user.id, { avatar_url: emoji } as any);
+                                      setUsers(prev => prev.map(u => u.id === user.id ? updated : u));
+                                      setListAvatarPickerUserId(null);
+                                    } catch (err) {
+                                      console.error('Failed to update avatar:', err);
+                                    }
+                                  }}
+                                  className={`w-8 h-8 rounded hover:bg-notion-hover flex items-center justify-center text-base transition-colors ${user.avatar_url === emoji ? 'bg-notion-hover ring-1 ring-blue-400' : ''}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <span className="font-medium text-notion-text">{user.display_name}</span>
                     </div>

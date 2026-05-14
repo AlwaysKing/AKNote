@@ -64,8 +64,8 @@ function CascadingPageItem({ page, spaceSlug, onClose }: { page: Page; spaceSlug
     >
       <div
         onClick={handleClick}
-        className={`flex items-center h-[30px] px-3 cursor-pointer rounded-sm transition-colors text-left ${
-          isActive ? 'bg-notion-hover' : 'hover:bg-notion-hover'
+        className={`flex items-center h-[30px] px-2.5 cursor-pointer rounded-md transition-colors text-left ${
+          isActive ? 'bg-[#E6F0FF]' : 'hover:bg-notion-hover'
         }`}
       >
         <span className="flex items-center justify-center flex-shrink-0 mr-2" style={{ width: '22px', height: '18px' }}>
@@ -84,7 +84,7 @@ function CascadingPageItem({ page, spaceSlug, onClose }: { page: Page; spaceSlug
       </div>
       {hasChildren && showSubmenu && (
         <div
-          className={`absolute top-0 w-[260px] bg-white border border-notion-border rounded-lg shadow-lg z-30 py-1 ${
+          className={`absolute top-0 w-[260px] bg-white border border-notion-border rounded-lg shadow-lg z-50 py-1.5 px-1.5 ${
             flipLeft ? 'right-full mr-0.5' : 'left-full ml-0.5'
           }`}
         >
@@ -128,13 +128,13 @@ function BreadcrumbPageItem({ page, siblings, spaceSlug, isLast, isOpen, onMouse
         <span className="truncate">{page.title || '未命名页面'}</span>
       </span>
       {isOpen && siblings.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 w-[240px] bg-white border border-notion-border rounded-lg shadow-lg z-20 py-1">
+        <div className="absolute left-0 top-full mt-1 w-[240px] bg-white border border-notion-border rounded-lg shadow-lg z-50 py-1.5 px-1.5">
           {siblings.map(sibling => (
             <div
               key={sibling.id}
               onClick={() => navigate(`/s/${spaceSlug}/p/${sibling.id}`)}
-              className={`flex items-center h-[30px] px-3 cursor-pointer rounded-sm transition-colors text-left ${
-                location.pathname.includes(`/p/${sibling.id}`) ? 'bg-notion-hover' : 'hover:bg-notion-hover'
+              className={`flex items-center h-[30px] px-2.5 cursor-pointer rounded-md transition-colors text-left ${
+                location.pathname.includes(`/p/${sibling.id}`) ? 'bg-[#E6F0FF]' : 'hover:bg-notion-hover'
               }`}
             >
               <span className="flex items-center justify-center flex-shrink-0 mr-2" style={{ width: '22px', height: '18px' }}>
@@ -198,8 +198,8 @@ function SpaceMenuItem({ space, isCurrent, pageTree, onClose, isOpen, onMouseEnt
     >
       <div
         onClick={handleClick}
-        className={`flex items-center h-[30px] px-3 cursor-pointer rounded-sm transition-colors text-left ${
-          isCurrent ? 'bg-notion-hover' : 'hover:bg-notion-hover'
+        className={`flex items-center h-[30px] px-2.5 cursor-pointer rounded-md transition-colors text-left ${
+          isCurrent ? 'bg-[#E6F0FF]' : 'hover:bg-notion-hover'
         }`}
       >
         <span className="flex items-center justify-center flex-shrink-0 mr-2" style={{ width: '22px', height: '18px' }}>
@@ -216,7 +216,7 @@ function SpaceMenuItem({ space, isCurrent, pageTree, onClose, isOpen, onMouseEnt
       </div>
       {isOpen && (
         <div
-          className={`absolute top-0 w-[260px] bg-white border border-notion-border rounded-lg shadow-lg z-30 py-1 ${
+          className={`absolute top-0 w-[260px] bg-white border border-notion-border rounded-lg shadow-lg z-50 py-1.5 px-1.5 ${
             flipLeft ? 'right-full mr-0.5' : 'left-full ml-0.5'
           }`}
         >
@@ -338,7 +338,7 @@ export default function Breadcrumb({ pageTitle, spaceSlug, actions }: Breadcrumb
         </button>
 
         {showMenu && (
-          <div className="absolute left-0 top-full mt-1 w-[240px] bg-white border border-notion-border rounded-lg shadow-lg z-20 py-1">
+          <div className="absolute left-0 top-full mt-1 w-[240px] bg-white border border-notion-border rounded-lg shadow-lg z-50 py-1.5 px-1.5">
             {spaces.map(space => (
               <SpaceMenuItem
                 key={space.id}

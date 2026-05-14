@@ -363,6 +363,12 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 		return nil, err
 	}
 
+	// Resolve actual directory name
+	spaceDir, dirName := s.resolveSpaceDir(spaceSlug)
+	if spaceDir == "" {
+		return nil, fmt.Errorf("space not found: %s", spaceSlug)
+	}
+
 	title := req.Title
 
 	if req.ParentID != nil {
@@ -404,8 +410,8 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 	}
 
 	// Root level
-	title = s.resolveUniqueTitle(filepath.Join(s.docsDir, spaceSlug), title, "")
-	relPath := filepath.Join(spaceSlug, title+".md")
+	title = s.resolveUniqueTitle(spaceDir, title, "")
+	relPath := filepath.Join(dirName, title+".md")
 
 	rootFm := frontmatter.FrontmatterData{}
 	if req.Icon != "" {
@@ -554,11 +560,17 @@ func (s *PageService) Delete(spaceSlug string, pageID int) error {
 		return err
 	}
 
+	// Resolve actual directory name (may differ from slug in case)
+	spaceDir, dirName := s.resolveSpaceDir(spaceSlug)
+	if spaceDir == "" {
+		return fmt.Errorf("space not found: %s", spaceSlug)
+	}
+
 	absPath := filepath.Join(s.docsDir, page.FilePath)
 	pageName := strings.TrimSuffix(filepath.Base(page.FilePath), ".md")
 	parentDir := filepath.Dir(absPath)
 
-	relPath := strings.TrimPrefix(page.FilePath, spaceSlug+"/")
+	relPath := strings.TrimPrefix(page.FilePath, dirName+"/")
 	fileName := filepath.Base(relPath)
 	parentRel := strings.TrimSuffix(relPath, "/"+fileName)
 
@@ -569,10 +581,10 @@ func (s *PageService) Delete(spaceSlug string, pageID int) error {
 		trashSub = filepath.Join(strings.ReplaceAll(parentRel, "/", "_"), fileName)
 	}
 
-	trashDir := filepath.Join(s.docsDir, spaceSlug, ".trash", filepath.Dir(trashSub))
+	trashDir := filepath.Join(spaceDir, ".trash", filepath.Dir(trashSub))
 	os.MkdirAll(trashDir, 0755)
 
-	trashFile := filepath.Join(s.docsDir, spaceSlug, ".trash", trashSub)
+	trashFile := filepath.Join(spaceDir, ".trash", trashSub)
 	if err := os.Rename(absPath, trashFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to move page to trash: %w", err)
 	}

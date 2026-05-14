@@ -5,6 +5,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { usePageStore } from '../../stores/pageStore';
 import { useSpaceStore } from '../../stores/spaceStore';
 import MoveToDialog from './MoveToDialog';
+import PageIcon from '../Editor/PageIcon';
 
 interface PageTreeItemProps {
   page: Page;
@@ -15,18 +16,21 @@ interface PageTreeItemProps {
 
 export default function PageTreeItem({ page, level, expandedPageIds, onToggleExpand }: PageTreeItemProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
+  const [showRenamePanel, setShowRenamePanel] = useState(false);
   const [renameTitle, setRenameTitle] = useState(page.title);
+  const [renamePanelPos, setRenamePanelPos] = useState({ top: 0, left: 0 });
   const [showMoveDialog, setShowMoveDialog] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
+  const renamePanelRef = useRef<HTMLDivElement>(null);
+  const iconPickerActive = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { spaceSlug } = useParams<{ spaceSlug: string }>();
   const { createPage, deletePage, updateMetadata, refreshPageTree, duplicatePage, movePage } = usePageStore();
   const hasChildren = page.children && page.children.length > 0;
-  const isActive = location.pathname.includes(`/p/${page.id}`);
+  const isActive = new RegExp(`/p/${page.id}$`).test(location.pathname);
   const isExpanded = expandedPageIds.has(page.id);
 
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
@@ -44,21 +48,36 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
   }, [showMenu]);
 
   useEffect(() => {
-    if (isRenaming && renameRef.current) {
+    if (showRenamePanel && renameRef.current) {
       renameRef.current.focus();
       renameRef.current.select();
     }
-  }, [isRenaming]);
+  }, [showRenamePanel]);
+
+  // Sync renameTitle when page title changes externally
+  useEffect(() => {
+    if (!showRenamePanel) {
+      setRenameTitle(page.title);
+    }
+  }, [page.title, showRenamePanel]);
 
   const handleClick = () => {
-    if (isRenaming) return;
     navigate(`/s/${spaceSlug}/p/${page.id}`);
   };
 
   const openMenu = (e: React.MouseEvent) => {
     e.stopPropagation();
     const rect = (e.target as HTMLElement).getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.left - 140 });
+    const menuWidth = 180;
+    const menuHeight = 280;
+    let top = rect.bottom + 4;
+    let left = rect.left;
+    // Clamp to viewport
+    if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
+    if (left < 8) left = 8;
+    if (top + menuHeight > window.innerHeight - 8) top = window.innerHeight - menuHeight - 8;
+    if (top < 8) top = 8;
+    setMenuPos({ top, left });
     setShowMenu(true);
   };
 
@@ -77,11 +96,11 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
     if (!spaceSlug) return;
     setShowMenu(false);
     try {
+      if (isActive) {
+        navigate(`/s/${spaceSlug}`, { replace: true });
+      }
       await deletePage(spaceSlug, page.id);
       await refreshPageTree();
-      if (isActive) {
-        navigate(`/s/${spaceSlug}`);
-      }
     } catch (err) {
       console.error('Failed to delete page:', err);
     }
@@ -90,7 +109,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
   const handleRenameSubmit = async () => {
     if (!spaceSlug || !renameTitle.trim()) {
       setRenameTitle(page.title);
-      setIsRenaming(false);
+      setShowRenamePanel(false);
       return;
     }
     try {
@@ -100,7 +119,18 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
       console.error('Failed to rename page:', err);
       setRenameTitle(page.title);
     }
-    setIsRenaming(false);
+    setShowRenamePanel(false);
+  };
+
+  const handleRenameBlur = () => {
+    // Delay to check if focus moved to something inside the panel (e.g. icon picker)
+    setTimeout(() => {
+      if (iconPickerActive.current) return; // Picker is open, don't close
+      if (renamePanelRef.current && renamePanelRef.current.contains(document.activeElement)) {
+        return; // Focus still within panel, don't submit
+      }
+      handleRenameSubmit();
+    }, 150);
   };
 
   const handleToggleStar = async () => {
@@ -156,7 +186,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
         className={`w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left group ${
           isActive ? 'bg-notion-hover' : ''
         }`}
-        style={{ paddingLeft: `${level * 16 + 16}px`, paddingRight: '8px' }}
+        style={{ paddingLeft: `${level * 16 + 8}px`, paddingRight: '8px' }}
       >
         {/* Icon/Chevron — icon by default, chevron on row hover */}
         <button
@@ -176,28 +206,13 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
           <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
         </button>
 
-        {/* Title or rename input */}
-        {isRenaming ? (
-          <input
-            ref={renameRef}
-            value={renameTitle}
-            onChange={(e) => setRenameTitle(e.target.value)}
-            onBlur={handleRenameSubmit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRenameSubmit();
-              if (e.key === 'Escape') { setRenameTitle(page.title); setIsRenaming(false); }
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 text-sm text-notion-text bg-white border border-blue-400 rounded px-1 py-0 focus:outline-none min-w-0"
-          />
-        ) : (
-          <span
-            onClick={handleClick}
-            className={`text-sm font-medium truncate flex-1 cursor-pointer ${isActive ? 'text-notion-text' : 'text-notion-sidebarText'}`}
-          >
-            {page.title || '未命名页面'}
-          </span>
-        )}
+        {/* Title */}
+        <span
+          onClick={handleClick}
+          className={`text-sm font-medium truncate flex-1 cursor-pointer ${isActive ? 'text-notion-text' : 'text-notion-sidebarText'}`}
+        >
+          {page.title || '未命名页面'}
+        </span>
 
         {/* Copy feedback toast */}
         {copyFeedback && (
@@ -226,54 +241,93 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
       {showMenu && (
         <div
           ref={menuRef}
-          className="fixed z-50 bg-white border border-notion-border rounded-lg shadow-xl py-1 min-w-[180px]"
+          className="fixed z-50 bg-white border border-notion-border rounded-lg shadow-xl py-1.5 px-1.5 min-w-[180px]"
           style={{ top: menuPos.top, left: menuPos.left }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={handleToggleStar}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded-md transition-colors"
           >
-            <Star className={`w-4 h-4 ${page.is_starred ? 'fill-yellow-400 text-yellow-400' : 'text-notion-textSecondary'}`} />
-            {page.is_starred ? '取消收藏' : '添加收藏'}
+            <Star className="w-4 h-4 text-notion-textSecondary" />
+            {page.is_starred ? '取消最爱' : '添加到最爱'}
           </button>
           <button
-            onClick={() => { setShowMenu(false); setIsRenaming(true); }}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            onClick={() => {
+              setShowMenu(false);
+              setRenamePanelPos({ top: menuPos.top, left: menuPos.left });
+              setShowRenamePanel(true);
+            }}
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded-md transition-colors"
           >
             <Edit3 className="w-4 h-4 text-notion-textSecondary" />
             重命名
           </button>
           <button
             onClick={handleCopyLink}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded-md transition-colors"
           >
             <Link className="w-4 h-4 text-notion-textSecondary" />
             拷贝链接
           </button>
           <button
             onClick={handleDuplicate}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded-md transition-colors"
           >
             <Copy className="w-4 h-4 text-notion-textSecondary" />
             创建副本
           </button>
           <button
             onClick={() => { setShowMenu(false); setShowMoveDialog(true); }}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-notion-text hover:bg-notion-hover rounded-md transition-colors"
           >
             <FolderInput className="w-4 h-4 text-notion-textSecondary" />
             移动到
           </button>
-          <hr className="my-1 border-notion-border" />
+          <hr className="my-1 mx-1.5 border-notion-border" />
           <button
             onClick={handleDelete}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
           >
             <Trash2 className="w-4 h-4" />
             移到回收站
           </button>
         </div>
+      )}
+
+      {/* Rename floating panel */}
+      {showRenamePanel && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setRenameTitle(page.title); setShowRenamePanel(false); }} />
+          <div
+            ref={renamePanelRef}
+            className="fixed z-50 bg-white border border-notion-border rounded-lg shadow-xl py-1 px-1.5 min-w-[340px]"
+            style={{ top: renamePanelPos.top, left: renamePanelPos.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-1.5">
+              <PageIcon icon={page.icon} spaceSlug={spaceSlug!} pageId={page.id} compact onOpenChange={(open) => {
+                if (open) {
+                  iconPickerActive.current = true;
+                } else {
+                  // Delay clearing to let the blur handler's 150ms check pass first
+                  setTimeout(() => { iconPickerActive.current = false; }, 200);
+                }
+              }} onChange={() => refreshPageTree()} />
+              <input
+                ref={renameRef}
+                value={renameTitle}
+                onChange={(e) => setRenameTitle(e.target.value)}
+                onBlur={handleRenameBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameSubmit();
+                  if (e.key === 'Escape') { setRenameTitle(page.title); setShowRenamePanel(false); }
+                }}
+                className="flex-1 text-sm text-notion-text bg-white border border-notion-border rounded px-2 py-1.5 focus:outline-none focus:border-blue-400 min-w-0"
+              />
+            </div>
+          </div>
+        </>
       )}
 
       {/* Move-to dialog */}
@@ -283,6 +337,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
           pageTree={useSpaceStore.getState().pageTree}
           onClose={() => setShowMoveDialog(false)}
           onMove={handleMove}
+          position={{ top: menuPos.top, left: menuPos.left }}
         />
       )}
 
@@ -297,9 +352,9 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
         ) : (
           <div
             className="flex items-center h-[30px] rounded-md text-left"
-            style={{ paddingLeft: `${level * 16 + 32}px`, paddingRight: '8px' }}
+            style={{ paddingLeft: `${level * 16 + 40}px`, paddingRight: '8px' }}
           >
-            <span className="text-sm font-semibold text-notion-textSecondary">内无页面</span>
+            <span className="text-sm font-medium text-notion-textSecondary">内无页面</span>
           </div>
         )
       )}
