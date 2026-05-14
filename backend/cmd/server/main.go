@@ -31,6 +31,8 @@ func main() {
 	os.MkdirAll(uploadDir, 0755)
 	iconDir := filepath.Join(dataDir, "icons")
 	os.MkdirAll(iconDir, 0755)
+	coverDir := filepath.Join(dataDir, "covers")
+	os.MkdirAll(coverDir, 0755)
 
 	// Initialize database
 	db, err := repository.NewDB(dataDir)
@@ -60,7 +62,7 @@ func main() {
 	userHandler := handler.NewUserHandler(userService)
 	spaceHandler := handler.NewSpaceHandler(spaceService, authService)
 	pageHandler := handler.NewPageHandler(pageService, spaceService, authService)
-	uploadHandler := handler.NewUploadHandler(pageService, uploadDir, iconDir)
+	uploadHandler := handler.NewUploadHandler(pageService, uploadDir, iconDir, coverDir)
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
@@ -135,6 +137,17 @@ func main() {
 		r.Get("/api/icons", uploadHandler.ListIcons)
 		r.Get("/api/icons/check", uploadHandler.CheckIconName)
 		r.Post("/api/icons/use", uploadHandler.UseIcon)
+		r.Post("/api/icons/upload", uploadHandler.UploadIcon)
+		r.Post("/api/icons/delete", uploadHandler.DeleteIcon)
+		r.Put("/api/icons/rename", uploadHandler.RenameIcon)
+
+			// Cover library
+			r.Get("/api/covers", uploadHandler.ListCovers)
+			r.Get("/api/covers/check", uploadHandler.CheckCoverName)
+			r.Post("/api/covers/use", uploadHandler.UseCover)
+			r.Post("/api/covers/upload", uploadHandler.UploadCover)
+			r.Post("/api/covers/delete", uploadHandler.DeleteCover)
+			r.Put("/api/covers/rename", uploadHandler.RenameCover)
 	})
 
 	// Public upload files
@@ -142,6 +155,9 @@ func main() {
 
 	// Public icon library files
 	r.Get("/api/icons/*", uploadHandler.ServeIcon)
+
+	// Public cover library files
+	r.Get("/api/covers/*", uploadHandler.ServeCover)
 
 	// Public page assets (cover images, etc.) — no auth needed for CSS background-image
 	r.Get("/api/spaces/{slug}/pages/{id}/assets/*", pageHandler.ServeAsset)

@@ -1,4 +1,4 @@
-import { Settings, PanelLeft, Trash2, ArrowLeft, Users, Database, LogOut, User } from 'lucide-react';
+import { Settings, PanelLeft, Trash2, ArrowLeft, Users, Database, LogOut, User, Image } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SpaceSelector from '../Sidebar/SpaceSelector';
 import PageTree from '../Sidebar/PageTree';
@@ -89,6 +89,17 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </button>
             </>
           )}
+          <button
+            onClick={() => navigate('/admin?tab=resources')}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm transition-colors ${
+              adminTab === 'resources'
+                ? 'bg-notion-hover text-notion-text font-medium'
+                : 'text-notion-text hover:bg-notion-hover'
+            }`}
+          >
+            <Image className="w-4 h-4" />
+            <span>资源管理</span>
+          </button>
           <button
             onClick={() => navigate('/admin?tab=profile')}
             className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm transition-colors ${

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Image as ImageIcon, Check, Upload, Grid3X3, Search, Download } from 'lucide-react';
+import { Image as ImageIcon, Check, Upload, Grid3X3, Search, Download, User } from 'lucide-react';
 import { usePageStore } from '../../stores/pageStore';
+import { fetchCoverLibrary, checkCoverName, useCoverFromLibrary, CoverLibraryItem } from '../../api/covers';
 
 // 图库分类数据（参考 Notion 封面图库分类）
 const GALLERY_CATEGORIES = [
@@ -119,11 +120,20 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
   const [isHovered, setIsHovered] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerTab, setPickerTab] = useState<'gallery' | 'upload' | 'link' | 'unsplash'>('gallery');
-  const [galleryCategory, setGalleryCategory] = useState('gradient');
+  const [galleryCategory, setGalleryCategory] = useState('custom');
   const [linkUrl, setLinkUrl] = useState('');
   const [isRepositioning, setIsRepositioning] = useState(false);
   const [coverOffset, setCoverOffset] = useState(savedOffset ?? 50);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const savedOffsetRef = useRef(savedOffset);
+
+  // Sync coverOffset when savedOffset prop changes externally (e.g. after API save)
+  useEffect(() => {
+    if (savedOffset !== savedOffsetRef.current) {
+      savedOffsetRef.current = savedOffset;
+      setCoverOffset(savedOffset ?? 50);
+    }
+  }, [savedOffset]);
   const { updateMetadata } = usePageStore();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -131,7 +141,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
   const pickerRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
   const dragStartOffset = useRef(0);
-  const isDragging = useRef(false);
+  const isDraggingCover = useRef(false);
 
   // Unsplash search state
   const [unsplashQuery, setUnsplashQuery] = useState('');
@@ -139,10 +149,42 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
   const [unsplashLoading, setUnsplashLoading] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Cover library state
+  const [coverLibrary, setCoverLibrary] = useState<CoverLibraryItem[]>([]);
+  const [addToCoverLibrary, setAddToCoverLibrary] = useState(false);
+  const [coverName, setCoverName] = useState('');
+  const [coverNameError, setCoverNameError] = useState(false);
 
+  // Upload preview state (same pattern as PageIcon)
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Load cover library when picker opens
+  useEffect(() => {
+    if (showPicker) {
+      fetchCoverLibrary().then(setCoverLibrary).catch(() => {});
+    }
+  }, [showPicker]);
+
+  const handleCoverNameBlur = useCallback(async () => {
+    if (addToCoverLibrary && coverName.trim()) {
+      const exists = await checkCoverName(coverName.trim());
+      setCoverNameError(exists);
+    }
+  }, [addToCoverLibrary, coverName]);
+
+  const handleSelectFromLibrary = async (item: CoverLibraryItem) => {
+    try {
+      const assetPath = await useCoverFromLibrary(item.name, pageId, spaceSlug);
+      const newCoverUrl = `/api/spaces/${spaceSlug}/pages/${pageId}/assets/${assetPath}`;
+      await updateMetadata(spaceSlug, pageId, { cover_url: newCoverUrl });
+    } catch (e) {
+      console.error('Failed to use cover from library:', e);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
     try {
@@ -150,6 +192,13 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
       formData.append('file', file);
       formData.append('page_id', String(pageId));
       formData.append('space_slug', spaceSlug);
+
+      // Add to cover library if checked
+      if (addToCoverLibrary) {
+        formData.append('add_to_cover_library', 'true');
+        const name = coverName.trim() || file.name.replace(/\.[^.]+$/, '');
+        formData.append('cover_name', name);
+      }
 
       const xhr = new XMLHttpRequest();
       const uploadPromise = new Promise<{ path: string }>((resolve, reject) => {
@@ -172,6 +221,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
       const data = await uploadPromise;
       const newCoverUrl = `/api/spaces/${spaceSlug}/pages/${pageId}/assets/${data.path}`;
       await updateMetadata(spaceSlug, pageId, { cover_url: newCoverUrl });
+      setShowPicker(false);
     } catch (error) {
       console.error('Failed to upload cover:', error);
     } finally {
@@ -181,14 +231,63 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
     }
   };
 
+  // File input change — show preview first
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setPendingFile(file);
+      setPendingPreview(URL.createObjectURL(file));
+      setCoverName(file.name.replace(/\.[^.]+$/, ''));
+      setCoverNameError(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setPendingFile(file);
+      setPendingPreview(URL.createObjectURL(file));
+      setCoverName(file.name.replace(/\.[^.]+$/, ''));
+      setCoverNameError(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleConfirmUpload = () => {
+    if (pendingFile) {
+      handleFileUpload(pendingFile);
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setPendingFile(null);
+    setPendingPreview(null);
+    setCoverName('');
+    setCoverNameError(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSelectPreset = async (preset: string) => {
     await updateMetadata(spaceSlug, pageId, { cover_url: preset });
-    // Keep picker open so user can try different covers
   };
 
   const handleSelectUnsplash = async (url: string) => {
     await updateMetadata(spaceSlug, pageId, { cover_url: url });
-    // Keep picker open so user can try different covers
   };
 
   const handleRemove = async () => {
@@ -209,7 +308,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
         `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=12&orientation=landscape`,
         {
           headers: {
-            Authorization: 'Client-ID ' + 'YOUR_UNSPLASH_ACCESS_KEY', // TODO: 替换为实际的 Unsplash Access Key
+            Authorization: 'Client-ID ' + 'YOUR_UNSPLASH_ACCESS_KEY',
           },
         }
       );
@@ -239,13 +338,13 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
 
   const enterReposition = useCallback(() => {
     setIsRepositioning(true);
-    isDragging.current = false;
+    isDraggingCover.current = false;
     dragStartOffset.current = coverOffset;
   }, [coverOffset]);
 
-  const exitReposition = useCallback(() => {
+  const exitReposition = useCallback(async () => {
+    await updateMetadata(spaceSlug, pageId, { cover_offset: Math.round(coverOffset) });
     setIsRepositioning(false);
-    updateMetadata(spaceSlug, pageId, { cover_offset: coverOffset });
   }, [coverOffset, spaceSlug, pageId, updateMetadata]);
 
   // Close picker on outside click
@@ -274,13 +373,13 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
 
     const handleMouseDown = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest('button')) return;
-      isDragging.current = true;
+      isDraggingCover.current = true;
       dragStartY.current = e.clientY;
       dragStartOffset.current = coverOffset;
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
+      if (!isDraggingCover.current) return;
       const cover = coverRef.current;
       if (!cover) return;
       const coverHeight = cover.offsetHeight;
@@ -290,7 +389,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
       setCoverOffset(newOffset);
     };
 
-    const handleMouseUp = () => { isDragging.current = false; };
+    const handleMouseUp = () => { isDraggingCover.current = false; };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') exitReposition();
@@ -323,7 +422,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
           <ImageIcon className="w-4 h-4" />
           添加封面
         </button>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleInputChange} />
       </div>
     );
   }
@@ -384,16 +483,16 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
       {showPicker && (
         <div
           ref={pickerRef}
-          className="absolute top-12 right-3 w-[460px] bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-30"
+          className="absolute top-12 right-3 w-[540px] bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-30"
         >
           {/* Tabs */}
           <div className="flex items-center border-b border-gray-100">
             <div className="flex">
               {([
-                { key: 'gallery', label: '图库', Icon: Grid3X3 },
-                { key: 'upload', label: '上传', Icon: Upload },
-                { key: 'link', label: '链接', Icon: ImageIcon },
-                { key: 'unsplash', label: 'Unsplash', Icon: Search },
+                { key: 'gallery' as const, label: '图库', Icon: Grid3X3 },
+                { key: 'upload' as const, label: '上传', Icon: Upload },
+                { key: 'link' as const, label: '链接', Icon: ImageIcon },
+                { key: 'unsplash' as const, label: 'Unsplash', Icon: Search },
               ] as const).map(({ key, label, Icon }) => (
                 <button
                   key={key}
@@ -425,6 +524,17 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
               <>
                 {/* Category tabs */}
                 <div className="flex gap-1 px-3 pt-3 pb-2">
+                  <button
+                    onClick={() => setGalleryCategory('custom')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors ${
+                      galleryCategory === 'custom'
+                        ? 'bg-notion-hover text-notion-text font-medium'
+                        : 'text-notion-textSecondary hover:bg-notion-hover'
+                    }`}
+                  >
+                    <User className="w-3 h-3" />
+                    自定义
+                  </button>
                   {GALLERY_CATEGORIES.map(cat => (
                     <button
                       key={cat.id}
@@ -441,41 +551,132 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
                 </div>
                 {/* Category items */}
                 <div className="px-3 pb-3">
-                  <div className={`grid gap-2 ${galleryCategory === 'gradient' ? 'grid-cols-4' : 'grid-cols-4'}`}>
-                    {currentCategory?.items.map((item, i) => {
-                      const thumbUrl = getThumbUrl(item);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => handleSelectPreset(item)}
-                          className="h-14 rounded hover:ring-2 hover:ring-blue-400 transition-all overflow-hidden"
-                          style={thumbUrl ? {} : { background: item }}
-                        >
-                          {thumbUrl && (
-                            <img src={thumbUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {galleryCategory === 'custom' ? (
+                    coverLibrary.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {coverLibrary.map((item) => (
+                          <button
+                            key={item.name}
+                            onClick={() => handleSelectFromLibrary(item)}
+                            className="h-20 rounded hover:ring-2 hover:ring-blue-400 transition-all overflow-hidden relative group/lib"
+                          >
+                            <img src={item.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            <span className="absolute bottom-0 inset-x-0 px-1 py-0.5 text-[10px] text-white bg-black/50 opacity-0 group-hover/lib:opacity-100 transition-opacity truncate">
+                              {item.name.replace(/\.[^.]+$/, '')}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-sm text-gray-400 py-4">暂无自定义封面，上传时可添加到封面库</p>
+                    )
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2">
+                      {currentCategory?.items.map((item, i) => {
+                        const thumbUrl = getThumbUrl(item);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => handleSelectPreset(item)}
+                            className="h-14 rounded hover:ring-2 hover:ring-blue-400 transition-all overflow-hidden"
+                            style={thumbUrl ? {} : { background: item }}
+                          >
+                            {thumbUrl && (
+                              <img src={thumbUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </>
             )}
 
             {pickerTab === 'upload' && (
-              <div className="p-4">
-                <button
-                  className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-notion-text hover:bg-gray-50 transition-colors"
-                  onClick={() => { fileInputRef.current?.click(); }}
-                >
-                  上传文件
-                </button>
-                <p className="mt-3 text-xs text-gray-400 text-center">
-                  或使用⌘+V粘贴图片
-                </p>
-                <p className="mt-1 text-xs text-gray-400 text-center">
-                  宽于 1500 像素的图片效果最佳。
-                </p>
+              <div className="p-3">
+                {pendingPreview ? (
+                  <>
+                    {/* Preview */}
+                    <div className="rounded-lg overflow-hidden mb-3">
+                      <img src={pendingPreview} alt="" className="w-full h-32 object-cover" />
+                    </div>
+                    <div className="border-t border-notion-border my-2" />
+                    {/* Add to cover library checkbox */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none mb-2">
+                      <input
+                        type="checkbox"
+                        checked={addToCoverLibrary}
+                        onChange={(e) => { setAddToCoverLibrary(e.target.checked); if (!e.target.checked) setCoverNameError(false); }}
+                        className="w-3.5 h-3.5 rounded border-notion-border text-blue-500 focus:ring-blue-500"
+                      />
+                      <span className="text-xs text-notion-textSecondary">添加到封面库</span>
+                    </label>
+                    {/* Cover name input when library is checked */}
+                    {addToCoverLibrary && (
+                      <div className="mb-3">
+                        <p className="text-xs text-notion-textSecondary mb-1">封面名称</p>
+                        <input
+                          type="text"
+                          value={coverName}
+                          onChange={(e) => { setCoverName(e.target.value); setCoverNameError(false); }}
+                          onBlur={handleCoverNameBlur}
+                          placeholder="为封面命名"
+                          className={`w-full px-2 py-1.5 text-xs rounded-md outline-none border ${
+                            coverNameError
+                              ? 'border-red-400 focus:ring-1 focus:ring-red-400'
+                              : 'border-notion-border focus:ring-1 focus:ring-blue-400'
+                          }`}
+                        />
+                        {coverNameError && (
+                          <p className="text-[10px] text-red-500 mt-1">该名称已存在</p>
+                        )}
+                      </div>
+                    )}
+                    {/* Confirm / Cancel */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleConfirmUpload}
+                        disabled={isUploading || (addToCoverLibrary && coverNameError)}
+                        className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-md transition-colors disabled:opacity-50"
+                      >
+                        {isUploading ? '上传中…' : '确定'}
+                      </button>
+                      <button
+                        onClick={handleCancelUpload}
+                        disabled={isUploading}
+                        className="flex-1 px-3 py-1.5 text-xs font-medium text-notion-text bg-notion-sidebarBg hover:bg-notion-hover rounded-md transition-colors disabled:opacity-50"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Upload drop zone */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      className={`w-full border border-dashed rounded-md py-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
+                        isDragging
+                          ? 'border-blue-400 bg-blue-50 text-blue-500'
+                          : 'border-notion-border text-notion-textSecondary hover:bg-notion-hover'
+                      }`}
+                    >
+                      <Upload className="w-5 h-5" />
+                      <span className="text-xs">点击或拖拽文件上传</span>
+                    </div>
+                  </>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleInputChange}
+                />
               </div>
             )}
 
@@ -553,7 +754,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
         </div>
       )}
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleInputChange} />
       {/* Upload progress - bottom right corner */}
       {isUploading && (
         <div className="absolute bottom-3 right-3 z-40">

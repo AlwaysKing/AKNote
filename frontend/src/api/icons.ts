@@ -23,3 +23,20 @@ export async function useIconFromLibrary(iconName: string, pageId: number, space
   });
   return data.path;
 }
+
+export async function uploadToIconLibrary(file: File, name: string): Promise<IconLibraryItem> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('icon_name', name);
+  const { data } = await apiClient.post('/icons/upload', formData);
+  return data;
+}
+
+export async function deleteIcon(name: string): Promise<void> {
+  await apiClient.post('/icons/delete', { name });
+}
+
+export async function renameIcon(oldName: string, newName: string): Promise<IconLibraryItem> {
+  const { data } = await apiClient.put('/icons/rename', { old_name: oldName, new_name: newName });
+  return data;
+}

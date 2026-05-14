@@ -470,6 +470,10 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID int, req *model.Update
 		fm.Icon = *req.Icon
 	}
 	if req.CoverURL != nil {
+		// Clean up old local cover file when cover is being changed or removed
+		if fm.Cover != "" && fm.Cover != s.toRelativeCover(*req.CoverURL) {
+			s.cleanupLocalAsset(spaceSlug, page.FilePath, fm.Cover)
+		}
 		fm.Cover = s.toRelativeCover(*req.CoverURL)
 	}
 	if req.FullPage != nil {
