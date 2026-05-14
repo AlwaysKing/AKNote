@@ -158,30 +158,23 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
         }`}
         style={{ paddingLeft: `${level * 16 + 16}px`, paddingRight: '8px' }}
       >
-        {/* Icon/Chevron — shared position: icon by default, chevron on hover */}
-        {page.icon ? (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(page.id, !isExpanded); }}
-            className="flex items-center justify-center flex-shrink-0 mr-2 hover:bg-notion-border rounded transition-colors group/icon"
-            style={{ width: '22px', height: '18px' }}
-          >
-            {(page.icon.startsWith('/') || page.icon.startsWith('http')) ? (
-              <img src={page.icon} alt="" className="w-[18px] h-[18px] object-contain group-hover/icon:hidden" />
+        {/* Icon/Chevron — icon by default, chevron on row hover */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(page.id, !isExpanded); }}
+          className="flex items-center justify-center flex-shrink-0 mr-2 rounded transition-colors"
+          style={{ width: '22px', height: '18px' }}
+        >
+          {page.icon ? (
+            (page.icon.startsWith('/') || page.icon.startsWith('http')) ? (
+              <img src={page.icon} alt="" className="w-[18px] h-[18px] object-contain group-hover:hidden" />
             ) : (
-              <span className="text-[18px] leading-none group-hover/icon:hidden" style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"' }}>{page.icon}</span>
-            )}
-            <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-          </button>
-        ) : (
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(page.id, !isExpanded); }}
-            className="flex items-center justify-center flex-shrink-0 mr-2 hover:bg-notion-border rounded transition-colors group/icon"
-            style={{ width: '22px', height: '18px' }}
-          >
-            <FileText className="w-[18px] h-[18px] text-[#91918e] group-hover/icon:hidden" strokeWidth={1.7} />
-            <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover/icon:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-          </button>
-        )}
+              <span className="text-[18px] leading-none group-hover:hidden" style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"' }}>{page.icon}</span>
+            )
+          ) : (
+            <FileText className="w-[18px] h-[18px] text-[#91918e] group-hover:hidden" strokeWidth={1.7} />
+          )}
+          <ChevronRight className={`w-3 h-3 text-[#ada9a3] hidden group-hover:block transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+        </button>
 
         {/* Title or rename input */}
         {isRenaming ? (
@@ -293,13 +286,22 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
         />
       )}
 
-      {/* Children */}
-      {hasChildren && isExpanded && (
-        <div>
-          {page.children!.map((child) => (
-            <PageTreeItem key={child.id} page={child} level={level + 1} expandedPageIds={expandedPageIds} onToggleExpand={onToggleExpand} />
-          ))}
-        </div>
+      {/* Children or empty state */}
+      {isExpanded && (
+        hasChildren ? (
+          <div>
+            {page.children!.map((child) => (
+              <PageTreeItem key={child.id} page={child} level={level + 1} expandedPageIds={expandedPageIds} onToggleExpand={onToggleExpand} />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="flex items-center h-[30px] rounded-md text-left"
+            style={{ paddingLeft: `${(level + 1) * 16 + 16 + 22 + 8}px`, paddingRight: '8px' }}
+          >
+            <span className="text-sm text-notion-textSecondary">内无页面</span>
+          </div>
+        )
       )}
     </div>
   );
