@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext } from '@blocknote/react';
 import { BlockNoteEditor } from '@blocknote/core';
+import { zh } from '@blocknote/core/locales';
 import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
 import { blockNoteComponents, clearBlockSelection } from './BlockNoteComponents';
@@ -20,6 +21,7 @@ export function PageEditor({ initialContent, onSave, onSyncStatusChange, readOnl
 
   const editor: BlockNoteEditor = useCreateBlockNote({
     initialContent: markdownToBlocks(initialContent),
+    dictionary: zh,
   });
 
   const triggerSave = useCallback(async () => {
