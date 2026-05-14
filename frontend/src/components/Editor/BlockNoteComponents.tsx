@@ -514,8 +514,11 @@ const SuggestionMenuItem: React.FC<{
       onClick={onClick}
       data-selected={isSelected || undefined}
     >
-      {item.icon && <span>{item.icon}</span>}
-      <span>{item.title || item.name}</span>
+      {item.icon && <span className="bn-suggestion-menu-item-icon">{item.icon}</span>}
+      <span className="bn-suggestion-menu-item-text">
+        <span className="bn-suggestion-menu-item-title">{item.title || item.name}</span>
+        {item.subtext && <span className="bn-suggestion-menu-item-subtext">{item.subtext}</span>}
+      </span>
     </div>
   );
 };
