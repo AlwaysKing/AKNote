@@ -4,7 +4,7 @@ import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
 import { zh } from '@blocknote/core/locales';
 import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
-import { blockNoteComponents, clearBlockSelection } from './BlockNoteComponents';
+import { blockNoteComponents, setBlockSelection } from './BlockNoteComponents';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
 import { BookmarkBlockSpec } from './BookmarkBlock';
 import LinkPasteMenu from './LinkPasteMenu';
@@ -82,7 +82,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     schema,
     initialContent: markdownToBlocks(initialContent) as any,
     dictionary: customZh as any,
-  });
+    trailingBlock: false,
+  } as any);
 
   // Write mirror to IndexedDB — fast, local, no network
   const triggerMirror = useCallback(() => {
@@ -116,6 +117,37 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
     document.addEventListener('keydown', handleSaveShortcut);
     return () => document.removeEventListener('keydown', handleSaveShortcut);
+  }, [editor, readOnly]);
+
+  // Slash menu: only trigger on empty blocks; "//" cancels
+  useEffect(() => {
+    const container = editorRef.current;
+    if (!container || readOnly) return;
+
+    const handleSlashKey = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+
+      // Check if current block is empty
+      const currentBlock = editor.getTextCursorPosition().block;
+      const content = currentBlock.content;
+      const isEmpty = !content || (Array.isArray(content) && content.length === 0);
+
+      if (!isEmpty) {
+        // Block has content — let "/" be typed normally, but close the slash menu
+        // before the next paint so the user never sees it
+        requestAnimationFrame(() => {
+          const pmEl = container.querySelector('.ProseMirror');
+          if (pmEl) {
+            pmEl.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true,
+            }));
+          }
+        });
+      }
+    };
+
+    container.addEventListener('keydown', handleSlashKey, true);
+    return () => container.removeEventListener('keydown', handleSlashKey, true);
   }, [editor, readOnly]);
 
   const handleChange = useCallback(() => {
@@ -208,24 +240,176 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     }
   }, [editor]);
 
-  // Block selection: click on empty space or use Escape to deselect
+  // Block selection: Escape toggles, click deselects, drag selects multiple
+  const dragOccurredRef = useRef(false);
+
   useEffect(() => {
     const container = editorRef.current;
     if (!container || readOnly) return;
 
+    let selectedIds: string[] = [];
+    let isDragging = false;
+    let dragOccurred = false;
+    let startX = 0;
+    let startY = 0;
+    let selectionRect: HTMLDivElement | null = null;
+
+    function updateSelection(ids: string[]) {
+      selectedIds = ids;
+      setBlockSelection(ids.length > 0 ? ids : null);
+    }
+
+    // Escape: toggle between editing ↔ selected
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        clearBlockSelection();
+        e.preventDefault();
+        if (selectedIds.length > 0) {
+          updateSelection([]);
+        } else {
+          const currentBlock = editor.getTextCursorPosition().block;
+          updateSelection([currentBlock.id as string]);
+        }
       }
     };
 
-    container.addEventListener('click', () => clearBlockSelection());
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      container.removeEventListener('click', () => clearBlockSelection());
-      document.removeEventListener('keydown', handleKeyDown);
+    // Mousedown on non-block area: start drag selection
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement;
+
+      // Only start in the scrollable content area (covers side whitespace too)
+      const scrollableArea = container.closest('.overflow-y-auto');
+      if (!scrollableArea || !scrollableArea.contains(target)) return;
+
+      if (target.closest('.bn-block-outer')) return;
+      if (target.closest('button, a, input, [contenteditable="true"]')) return;
+
+      e.preventDefault(); // prevent browser text selection during drag
+      isDragging = true;
+      dragOccurred = false;
+      dragOccurredRef.current = false;
+      startX = e.clientX;
+      startY = e.clientY;
     };
-  }, [readOnly]);
+
+    // Mousemove: update selection rectangle + highlight intersecting blocks
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dist < 5) return;
+
+      if (!dragOccurred) {
+        dragOccurred = true;
+        dragOccurredRef.current = true;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'default';
+        selectionRect = document.createElement('div');
+        selectionRect.style.cssText =
+          'position:fixed;pointer-events:none;z-index:9999;' +
+          'background:rgba(35,131,226,0.1);border-radius:2px;';
+        document.body.appendChild(selectionRect);
+      }
+
+      const left = Math.min(startX, e.clientX);
+      const top = Math.min(startY, e.clientY);
+      const width = Math.abs(e.clientX - startX);
+      const height = Math.abs(e.clientY - startY);
+
+      if (selectionRect) {
+        selectionRect.style.left = `${left}px`;
+        selectionRect.style.top = `${top}px`;
+        selectionRect.style.width = `${width}px`;
+        selectionRect.style.height = `${height}px`;
+      }
+
+      // Find intersecting blocks
+      const selRect = { left, top, right: left + width, bottom: top + height };
+      const blockOuters = container.querySelectorAll('.bn-block-outer');
+      const intersecting: string[] = [];
+
+      blockOuters.forEach(outer => {
+        const blockEl = outer.querySelector('[data-id]');
+        if (!blockEl) return;
+        const r = outer.getBoundingClientRect();
+        if (selRect.left < r.right && selRect.right > r.left &&
+            selRect.top < r.bottom && selRect.bottom > r.top) {
+          intersecting.push(blockEl.getAttribute('data-id')!);
+        }
+      });
+
+      updateSelection(intersecting);
+    };
+
+    // Mouseup: clean up drag
+    const handleMouseUp = () => {
+      if (selectionRect) {
+        selectionRect.remove();
+        selectionRect = null;
+      }
+      if (dragOccurred) {
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+      }
+      isDragging = false;
+    };
+
+    // Click: clear selection (unless after drag or on side menu)
+    const handleClick = (e: MouseEvent) => {
+      if (dragOccurred) {
+        dragOccurred = false;
+        return;
+      }
+      // Don't clear selection when clicking side menu (drag handle, add button)
+      if ((e.target as HTMLElement).closest('.bn-side-menu, [data-floating-ui-focusable]')) return;
+      if (selectedIds.length > 0) {
+        updateSelection([]);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('click', handleClick);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('click', handleClick);
+      selectionRect?.remove();
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [editor, readOnly]);
+
+
+  // Click below editor content: insert new empty paragraph and focus
+  const handleClickBelow = useCallback(() => {
+    if (readOnly) return;
+    if (dragOccurredRef.current) {
+      dragOccurredRef.current = false;
+      return;
+    }
+    const blocks = editor.document;
+    if (blocks.length === 0) return;
+
+    const lastDocBlock = blocks[blocks.length - 1];
+    const content = lastDocBlock.content;
+    const lastIsEmpty = !content || (Array.isArray(content) && content.length === 0);
+
+    if (lastIsEmpty) {
+      editor.setTextCursorPosition(lastDocBlock, 'end');
+    } else {
+      const inserted = editor.insertBlocks([{ type: 'paragraph' } as any], lastDocBlock, 'after');
+      if (inserted.length > 0) {
+        editor.setTextCursorPosition(inserted[0], 'start');
+      }
+    }
+    editor.focus();
+  }, [editor, readOnly]);
 
   // Unmount: write final mirror if there are unsaved changes
   useEffect(() => {
@@ -280,6 +464,14 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           />
         </div>
       </ComponentsContext.Provider>
+      {/* Clickable area below editor — click to append new paragraph */}
+      {!readOnly && (
+        <div
+          className="w-full cursor-text"
+          style={{ minHeight: '20vh' }}
+          onClick={handleClickBelow}
+        />
+      )}
       {pasteMenu && (
         <LinkPasteMenu
           url={pasteMenu.url}

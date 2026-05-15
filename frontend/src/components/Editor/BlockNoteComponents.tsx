@@ -53,20 +53,25 @@ const SideMenuRoot: React.FC<{ className?: string; children?: ReactNode; [key: s
 
 // 动态样式表管理：用于 block 选中高亮，避免 ProseMirror 重渲染覆盖 DOM class
 let blockSelectionStyleEl: HTMLStyleElement | null = null;
+let currentSelectedIds: string[] = [];
 
-function setBlockSelection(blockId: string | null) {
+export function getSelectedBlockIds(): string[] {
+  return [...currentSelectedIds];
+}
+
+function setBlockSelection(blockIds: string[] | null) {
+  currentSelectedIds = blockIds || [];
   if (!blockSelectionStyleEl) {
     blockSelectionStyleEl = document.createElement('style');
     blockSelectionStyleEl.id = 'block-selection-style';
     document.head.appendChild(blockSelectionStyleEl);
   }
-  if (blockId) {
-    // Notion: selection halo uses inset:2px overlay, rgba(35,131,226,0.14), border-radius 4px
-    blockSelectionStyleEl.textContent = `
-      .bn-block-outer:has(> [data-id="${blockId}"]) {
+  if (blockIds && blockIds.length > 0) {
+    const rules = blockIds.map(id => `
+      .bn-block-outer:has(> [data-id="${id}"]) {
         position: relative;
       }
-      .bn-block-outer:has(> [data-id="${blockId}"])::after {
+      .bn-block-outer:has(> [data-id="${id}"])::after {
         content: '';
         position: absolute;
         inset: 2px;
@@ -74,11 +79,14 @@ function setBlockSelection(blockId: string | null) {
         border-radius: 4px;
         pointer-events: none;
       }
-    `;
+    `).join('\n');
+    blockSelectionStyleEl.textContent = rules;
   } else {
     blockSelectionStyleEl.textContent = '';
   }
 }
+
+export { setBlockSelection };
 
 export function clearBlockSelection() {
   setBlockSelection(null);
@@ -97,6 +105,15 @@ const SideMenuButton: React.FC<{
   const { className, onClick, icon, draggable, onDragStart, onDragEnd, label, children } = props;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const editor = useBlockNoteEditor();
+
+  // Multi-block drag state
+  const multiDragRef = useRef<{
+    primaryId: string;
+    otherIds: string[];
+    beforeBlocks: Array<{ id: string; data: any }>;
+    afterBlocks: Array<{ id: string; data: any }>;
+  } | null>(null);
+  const multiDragGhostRef = useRef<{ ghost: HTMLDivElement; moveGhost: (de: DragEvent) => void } | null>(null);
 
   // Intercept "+" button click: insert empty block and open slash menu
   const handleClick = useCallback((e: React.MouseEvent) => {
@@ -162,15 +179,198 @@ const SideMenuButton: React.FC<{
 
       if (!targetBlockId) return;
 
+      // Don't override multi-selection if block is already selected
+      const currentSelection = getSelectedBlockIds();
+      if (currentSelection.includes(targetBlockId) && currentSelection.length > 1) return;
+
       // 延迟到 BlockNote/ProseMirror 重渲染完成后再应用样式
       setTimeout(() => {
-        setBlockSelection(targetBlockId);
+        setBlockSelection([targetBlockId]);
+      }, 100);
+    };
+
+    // Native dragstart: capture multi-block data
+    const handleNativeDragStart = (e: Event) => {
+      multiDragRef.current = null;
+
+      // Find block ID the same way as handleNativeClick (side menu is in a floating portal)
+      const sideMenu = btn.closest('.bn-side-menu');
+      if (!sideMenu) return;
+      const wrapper = sideMenu.closest('[data-floating-ui-focusable]');
+      if (!wrapper) return;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const elements = document.elementsFromPoint(wrapperRect.right + 20, wrapperRect.top + 2);
+      let blockId: string | null = null;
+      for (const el of elements) {
+        const blockOuter = (el as HTMLElement).closest('.bn-block-outer');
+        if (blockOuter) {
+          const bc = blockOuter.querySelector('[data-node-type="blockContainer"]') || blockOuter;
+          blockId = bc.getAttribute('data-id') || blockOuter.getAttribute('data-id');
+          break;
+        }
+      }
+      if (!blockId) return;
+
+      const selectedIds = getSelectedBlockIds();
+      if (!selectedIds.includes(blockId) || selectedIds.length <= 1) return;
+
+      const allBlocks = editor.document;
+      const primaryIndex = allBlocks.findIndex(b => b.id === blockId);
+
+      const beforeBlocks: Array<{ index: number; id: string; data: any }> = [];
+      const afterBlocks: Array<{ index: number; id: string; data: any }> = [];
+
+      for (const id of selectedIds) {
+        if (id === blockId) continue;
+        const idx = allBlocks.findIndex(b => b.id === id);
+        const block = allBlocks[idx];
+        if (!block) continue;
+        const blockData = { type: block.type, props: { ...block.props }, content: block.content, children: block.children };
+        if (idx < primaryIndex) {
+          beforeBlocks.push({ index: idx, id, data: blockData });
+        } else {
+          afterBlocks.push({ index: idx, id, data: blockData });
+        }
+      }
+
+      beforeBlocks.sort((a, b) => a.index - b.index);
+      afterBlocks.sort((a, b) => a.index - b.index);
+
+      multiDragRef.current = {
+        primaryId: blockId,
+        otherIds: [...beforeBlocks, ...afterBlocks].map(b => b.id),
+        beforeBlocks,
+        afterBlocks,
+      };
+
+      // Visual feedback: mark selected blocks as being dragged
+      for (const id of selectedIds) {
+        const blockEl = document.querySelector(`[data-id="${id}"]`);
+        const outer = blockEl?.closest('.bn-block-outer') as HTMLElement | null;
+        if (outer) outer.dataset.multiDrag = '';
+      }
+
+      // --- Custom floating ghost (replaces native drag image) ---
+      // Get editor width for ghost sizing
+      const editorEl = document.querySelector('.bn-editor');
+      const editorWidth = editorEl ? editorEl.getBoundingClientRect().width : 600;
+
+      const ghost = document.createElement('div');
+      ghost.style.cssText = `position:fixed;z-index:99999;pointer-events:none;opacity:0.7;width:${editorWidth}px;`;
+
+      // Wrap with inline styles matching editor appearance (no bn-* classes to avoid BlockNote interference)
+      const ghostRoot = document.createElement('div');
+      const ghostEditor = document.createElement('div');
+      ghostEditor.style.cssText = 'font-size:16px;line-height:1.5;color:#2c2c2b;padding:0;';
+      ghostRoot.appendChild(ghostEditor);
+
+      for (const id of selectedIds) {
+        const blockEl = document.querySelector(`[data-id="${id}"]`);
+        const outer = blockEl?.closest('.bn-block-outer') as HTMLElement | null;
+        if (outer) {
+          const clone = outer.cloneNode(true) as HTMLElement;
+          clone.removeAttribute('data-multi-drag');
+          // Strip BlockNote-specific attributes so its internal drag system ignores the ghost
+          clone.querySelectorAll('[data-id]').forEach(el => el.removeAttribute('data-id'));
+          clone.querySelectorAll('[data-node-type]').forEach(el => el.removeAttribute('data-node-type'));
+          clone.querySelectorAll('[data-content-type]').forEach(el => {
+            // Keep the attribute for styling but prefix to avoid BlockNote recognition
+            const val = el.getAttribute('data-content-type');
+            if (val) {
+              el.removeAttribute('data-content-type');
+              el.setAttribute('data-ghost-content-type', val);
+            }
+          });
+          ghostEditor.appendChild(clone);
+        }
+      }
+
+      ghost.appendChild(ghostRoot);
+      document.body.appendChild(ghost);
+
+      // Position ghost at mouse
+      const dragEvt = e as DragEvent;
+      ghost.style.left = `${dragEvt.clientX + 4}px`;
+      ghost.style.top = `${dragEvt.clientY + 4}px`;
+
+      // Move ghost with drag events
+      const moveGhost = (de: DragEvent) => {
+        // Last drag event has clientX/clientY = 0, skip it
+        if (de.clientX === 0 && de.clientY === 0) return;
+        ghost.style.left = `${de.clientX + 4}px`;
+        ghost.style.top = `${de.clientY + 4}px`;
+      };
+      btn.addEventListener('drag', moveGhost);
+      multiDragGhostRef.current = { ghost, moveGhost };
+
+      // Hide BlockNote's native drag ghost: add body class so CSS makes .bn-drag-preview
+      // invisible BEFORE BlockNote creates it and calls setDragImage.
+      document.body.classList.add('multi-drag-active');
+    };
+
+    // Native dragend: move other blocks to join the primary
+    const handleNativeDragEnd = () => {
+      // Remove body class that hides native drag preview
+      document.body.classList.remove('multi-drag-active');
+
+      // Clean up floating ghost
+      if (multiDragGhostRef.current) {
+        const { ghost, moveGhost } = multiDragGhostRef.current;
+        btn.removeEventListener('drag', moveGhost);
+        ghost.remove();
+        multiDragGhostRef.current = null;
+      }
+
+      if (!multiDragRef.current) return;
+
+      const captured = multiDragRef.current;
+      multiDragRef.current = null;
+
+      setTimeout(() => {
+        const { primaryId, otherIds, beforeBlocks, afterBlocks } = captured;
+        const currentDoc = editor.document;
+
+        // Remove other selected blocks (skip if already gone)
+        const existingOtherIds = otherIds.filter(id => currentDoc.some(b => b.id === id));
+        if (existingOtherIds.length > 0) {
+          editor.removeBlocks(existingOtherIds as any);
+        }
+
+        // Re-fetch primary after removal (position may have changed)
+        const docAfterRemove = editor.document;
+        if (!docAfterRemove.some(b => b.id === primaryId)) {
+          setBlockSelection(null);
+          return;
+        }
+
+        // Insert "after" blocks after the primary (in order)
+        if (afterBlocks.length > 0) {
+          editor.insertBlocks(afterBlocks.map(b => b.data) as any, primaryId as any, 'after');
+        }
+
+        // Insert "before" blocks before the primary (in order)
+        if (beforeBlocks.length > 0) {
+          editor.insertBlocks(beforeBlocks.map(b => b.data) as any, primaryId as any, 'before');
+        }
+
+        setBlockSelection(null);
+
+        // Clean up multi-drag visual feedback
+        document.querySelectorAll('[data-multi-drag]').forEach(el => {
+          delete (el as HTMLElement).dataset.multiDrag;
+        });
       }, 100);
     };
 
     btn.addEventListener('click', handleNativeClick);
-    return () => btn.removeEventListener('click', handleNativeClick);
-  }, [draggable]);
+    btn.addEventListener('dragstart', handleNativeDragStart);
+    btn.addEventListener('dragend', handleNativeDragEnd);
+    return () => {
+      btn.removeEventListener('click', handleNativeClick);
+      btn.removeEventListener('dragstart', handleNativeDragStart);
+      btn.removeEventListener('dragend', handleNativeDragEnd);
+    };
+  }, [draggable, editor]);
 
   return (
     <button

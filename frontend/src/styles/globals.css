@@ -611,6 +611,19 @@ h4[contenteditable],
    using [data-id="xxx"] selectors to survive ProseMirror DOM rebuilding.
    Notion uses rgba(35,131,226,0.14) background with no left blue line. */
 
+/* Multi-block drag: reduce opacity on all selected blocks during drag */
+.bn-block-outer[data-multi-drag] {
+  opacity: 0.4;
+}
+
+/* Hide BlockNote's native drag preview during multi-block drag */
+body.multi-drag-active .bn-drag-preview {
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
 /* ============================================
    Table Styles - Notion-like
    ============================================ */
