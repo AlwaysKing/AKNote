@@ -62,6 +62,7 @@ export default function SortablePageTreeItem({ page, level, expandedPageIds, onT
             backgroundColor: 'rgb(35, 131, 226)',
             top: -1,
             marginLeft: `${level * 16 + 8}px`,
+            opacity: 0.5,
           }}
         />
       )}
@@ -83,6 +84,7 @@ export default function SortablePageTreeItem({ page, level, expandedPageIds, onT
             backgroundColor: 'rgb(35, 131, 226)',
             bottom: -1,
             marginLeft: `${level * 16 + 8}px`,
+            opacity: 0.5,
           }}
         />
       )}

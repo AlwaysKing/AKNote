@@ -139,7 +139,7 @@ function DragGhost({ page, level, expandedPageIds }: { page: Page; level: number
   const isExpanded = expandedPageIds.has(page.id);
 
   return (
-    <div>
+    <div style={{ opacity: 0.7 }}>
       <div
         className="w-full flex items-center h-[30px] rounded-md"
         style={{ paddingLeft: `${level * 16 + 8}px`, paddingRight: '8px' }}
