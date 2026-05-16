@@ -54,7 +54,7 @@ function ToastContainer() {
   setToastsExternal = setToasts;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none">
+    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none">
       {toasts.map(t => (
         <ToastMessage key={t.id} message={t.message} actions={t.actions} />
       ))}
@@ -83,7 +83,7 @@ function ToastMessage({ message, actions }: { message: string; actions?: ToastAc
           <button
             key={i}
             onClick={action.onClick}
-            className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
+            className="text-white hover:text-white/80 font-medium transition-colors"
           >
             {action.label}
           </button>
