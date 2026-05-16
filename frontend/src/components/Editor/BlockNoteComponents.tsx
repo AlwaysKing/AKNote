@@ -404,6 +404,13 @@ const GenericMenuRoot: React.FC<{
   const setOpen = useCallback((open: boolean) => {
     setIsOpen(open);
     dragMenuOpen = open;
+    // Keep side menu visible and active while drag menu is open
+    // Use body class so CSS selector `body.drag-menu-open` has enough specificity
+    if (open) {
+      document.body.classList.add('drag-menu-open');
+    } else {
+      document.body.classList.remove('drag-menu-open');
+    }
     onOpenChange?.(open);
   }, [onOpenChange]);
 

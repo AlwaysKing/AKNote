@@ -345,10 +345,16 @@ h4[contenteditable],
 
 /* Override floating-ui wrapper */
 /* Notion: 图标颜色始终不变，只有按钮背景在 hover 时出现 */
+/* Default hidden — only shown when mouse is within the restricted hover zone (JS adds .side-menu-visible to body) */
 [data-floating-ui-focusable]:has(> .bn-side-menu) {
-  opacity: 1 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
   /* Notion: 侧边菜单出现在 block 左侧，间隙约 14px */
   left: -14px !important;
+}
+body.side-menu-visible [data-floating-ui-focusable]:has(> .bn-side-menu) {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .bn-side-menu {
@@ -394,6 +400,16 @@ h4[contenteditable],
 
 /* + button hover: Notion uses rgba(42,28,0,0.07) */
 .bn-side-menu .bn-button:hover {
+  background: rgba(42, 28, 0, 0.07) !important;
+}
+
+/* While drag menu is open: keep side menu visible regardless of mouse position */
+body.drag-menu-open [data-floating-ui-focusable]:has(> .bn-side-menu) {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+/* While drag menu is open: only the drag handle button gets active background */
+body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   background: rgba(42, 28, 0, 0.07) !important;
 }
 

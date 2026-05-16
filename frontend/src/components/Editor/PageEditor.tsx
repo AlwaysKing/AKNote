@@ -416,6 +416,104 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
   }, [editor, readOnly]);
 
+  // Side menu hover zone: only show side menu when mouse is within restricted horizontal area
+  // Notion behavior: buttons visible from blockLeft - 150px to blockLeft + blockWidth * 0.7
+  useEffect(() => {
+    if (readOnly) return;
+    const container = editorRef.current;
+    if (!container) return;
+
+    const handleSideMenuZone = (e: MouseEvent) => {
+      // When drag menu is open, keep side menu visible regardless of mouse position
+      if (isDragMenuOpen()) return;
+
+      // Find hovered block by y coordinate
+      const blockOuters = container.querySelectorAll('.bn-block-outer');
+      let hoveredOuter: HTMLElement | null = null;
+      for (const outer of blockOuters) {
+        const r = outer.getBoundingClientRect();
+        if (e.clientY >= r.top && e.clientY <= r.bottom) {
+          hoveredOuter = outer as HTMLElement;
+          break;
+        }
+      }
+
+      if (!hoveredOuter) {
+        document.body.classList.remove('side-menu-visible');
+        return;
+      }
+
+      // Get block content boundaries
+      const blockContent = hoveredOuter.querySelector('[data-id]') || hoveredOuter;
+      const contentRect = blockContent.getBoundingClientRect();
+
+      // Notion's hover zone: left boundary = blockLeft - 150px, right boundary = blockLeft + blockWidth * 0.7
+      const leftBound = contentRect.left - 150;
+      const rightBound = contentRect.left + contentRect.width * 0.7;
+
+      if (e.clientX >= leftBound && e.clientX <= rightBound) {
+        document.body.classList.add('side-menu-visible');
+      } else {
+        document.body.classList.remove('side-menu-visible');
+      }
+    };
+
+    document.addEventListener('mousemove', handleSideMenuZone);
+    return () => document.removeEventListener('mousemove', handleSideMenuZone);
+  }, [editor, readOnly]);
+
+  // Helper: check if a block outer element is input-capable (has editable text content)
+  // Blocks with .bn-inline-content are input-capable (paragraph, heading, list, etc.)
+  // Blocks without it (subpage, bookmark, pageReference, divider, image) are not
+  const isInputBlock = useCallback((blockOuter: HTMLElement): boolean => {
+    return !!blockOuter.querySelector('.bn-inline-content');
+  }, []);
+
+  // Helper: find nearest input-capable block in given direction
+  const findNearestInputBlock = useCallback((startOuter: HTMLElement, direction: 'above' | 'below'): HTMLElement | null => {
+    const container = editorRef.current;
+    if (!container) return null;
+
+    const blockOuters = Array.from(container.querySelectorAll('.bn-block-outer'));
+    const startIndex = blockOuters.indexOf(startOuter);
+    if (startIndex === -1) return null;
+
+    if (direction === 'above') {
+      for (let i = startIndex - 1; i >= 0; i--) {
+        if (isInputBlock(blockOuters[i] as HTMLElement)) return blockOuters[i] as HTMLElement;
+      }
+    } else {
+      for (let i = startIndex + 1; i < blockOuters.length; i++) {
+        if (isInputBlock(blockOuters[i] as HTMLElement)) return blockOuters[i] as HTMLElement;
+      }
+    }
+    return null;
+  }, [isInputBlock]);
+
+  // Helper: find block nearest to y coordinate
+  const findBlockByY = useCallback((y: number): HTMLElement | null => {
+    const container = editorRef.current;
+    if (!container) return null;
+
+    const blockOuters = container.querySelectorAll('.bn-block-outer');
+    let nearest: HTMLElement | null = null;
+    let minDist = Infinity;
+
+    for (const outer of blockOuters) {
+      const r = outer.getBoundingClientRect();
+      // Check if y is within block bounds (with some tolerance for padding)
+      const dist = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = outer as HTMLElement;
+      }
+    }
+
+    // Only return if within reasonable distance (block height or 25px tolerance)
+    if (nearest && minDist <= 25) return nearest;
+    return nearest; // still return nearest even if a bit far
+  }, []);
+
 
   // Click below editor content: insert new empty paragraph and focus
   const handleClickBelow = useCallback(() => {
@@ -456,15 +554,60 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       if (target.closest('.bn-block-outer, button, a, input, [contenteditable="true"]')) return;
       if (target.closest('[data-floating-ui-focusable]')) return;
 
+      // Click below editor content → append new paragraph
       const editorBottom = container.getBoundingClientRect().bottom;
       if (e.clientY >= editorBottom - 10) {
         handleClickBelow();
+        return;
+      }
+
+      // Click in whitespace around blocks → focus nearest input-capable block
+      const clickedBlock = findBlockByY(e.clientY);
+      if (!clickedBlock) return;
+
+      if (isInputBlock(clickedBlock)) {
+        // Input block: focus it directly
+        const blockEl = clickedBlock.querySelector('[data-id]');
+        const blockId = blockEl?.getAttribute('data-id');
+        if (blockId) {
+          editor.setTextCursorPosition(blockId as any, 'end');
+          editor.focus();
+        }
+        return;
+      }
+
+      // Non-input block (subpage, image, etc.): determine left or right
+      const blockContent = clickedBlock.querySelector('.bn-block-content') || clickedBlock.querySelector('[data-id]');
+      if (!blockContent) return;
+      const contentRect = blockContent.getBoundingClientRect();
+
+      let targetBlock: HTMLElement | null;
+      if (e.clientX < contentRect.left) {
+        // Left side → above nearest input block
+        targetBlock = findNearestInputBlock(clickedBlock, 'above');
+      } else {
+        // Right side → below nearest input block
+        targetBlock = findNearestInputBlock(clickedBlock, 'below');
+      }
+
+      if (targetBlock) {
+        const blockEl = targetBlock.querySelector('[data-id]');
+        const blockId = blockEl?.getAttribute('data-id');
+        if (blockId) {
+          editor.setTextCursorPosition(blockId as any, 'end');
+          editor.focus();
+          // Scroll target into view if needed
+          const targetRect = targetBlock.getBoundingClientRect();
+          if (targetRect.top < 0 || targetRect.bottom > window.innerHeight) {
+            targetBlock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        }
       }
     };
 
     scrollArea.addEventListener('click', handleScrollAreaClick);
     return () => scrollArea.removeEventListener('click', handleScrollAreaClick);
-  }, [readOnly, handleClickBelow]);
+  }, [readOnly, handleClickBelow, findBlockByY, isInputBlock, findNearestInputBlock, editor]);
 
   // Unmount: write final mirror if there are unsaved changes
   useEffect(() => {
