@@ -46,16 +46,10 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	// Get page ID if provided
-	pageIDStr := r.FormValue("page_id")
-	var pageID int
+	pageID := r.FormValue("page_id")
 	var slug string
 
-	if pageIDStr != "" {
-		pageID, err = strconv.Atoi(pageIDStr)
-		if err != nil {
-			http.Error(w, "Invalid page ID", http.StatusBadRequest)
-			return
-		}
+	if pageID != "" {
 		slug = r.FormValue("space_slug")
 	}
 
@@ -67,7 +61,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var filePath string
-	if pageID > 0 && slug != "" {
+	if pageID != "" && slug != "" {
 		// Upload to page's public directory
 		filePath, err = h.pageService.UploadAsset(slug, pageID, header.Filename, content)
 		if err != nil {
@@ -205,14 +199,14 @@ func (h *UploadHandler) UseIcon(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		IconName  string `json:"icon_name"`
-		PageID    int    `json:"page_id"`
+		PageID    string `json:"page_id"`
 		SpaceSlug string `json:"space_slug"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	if req.IconName == "" || req.PageID == 0 || req.SpaceSlug == "" {
+	if req.IconName == "" || req.PageID == "" || req.SpaceSlug == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
@@ -329,14 +323,14 @@ func (h *UploadHandler) UseCover(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		CoverName string `json:"cover_name"`
-		PageID    int    `json:"page_id"`
+		PageID    string `json:"page_id"`
 		SpaceSlug string `json:"space_slug"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
-	if req.CoverName == "" || req.PageID == 0 || req.SpaceSlug == "" {
+	if req.CoverName == "" || req.PageID == "" || req.SpaceSlug == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}

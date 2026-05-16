@@ -3,15 +3,15 @@ import { FileText, ChevronRight, Search, ArrowLeft } from 'lucide-react';
 import { Page } from '../../api/pages';
 
 interface MoveToDialogProps {
-  pageId: number;
+  pageId: string;
   pageTree: Page[];
   onClose: () => void;
-  onMove: (targetParentId: number | null) => void;
+  onMove: (targetParentId: string | null) => void;
   position?: { top: number; left: number };
 }
 
 // Recursively collect IDs of a page and all its descendants
-function collectDescendantIds(page: Page): number[] {
+function collectDescendantIds(page: Page): string[] {
   const ids = [page.id];
   if (page.children) {
     for (const child of page.children) {
@@ -21,7 +21,7 @@ function collectDescendantIds(page: Page): number[] {
   return ids;
 }
 
-function findPageById(pages: Page[], id: number): Page | null {
+function findPageById(pages: Page[], id: string): Page | null {
   for (const p of pages) {
     if (p.id === id) return p;
     if (p.children) {
@@ -32,13 +32,13 @@ function findPageById(pages: Page[], id: number): Page | null {
   return null;
 }
 
-function getChildrenOf(tree: Page[], parentId: number | null): Page[] {
+function getChildrenOf(tree: Page[], parentId: string | null): Page[] {
   if (parentId === null) return tree;
   const parent = findPageById(tree, parentId);
   return parent?.children || [];
 }
 
-function searchAllPages(pages: Page[], query: string, excludedIds: Set<number>): Page[] {
+function searchAllPages(pages: Page[], query: string, excludedIds: Set<string>): Page[] {
   const results: Page[] = [];
   const q = query.toLowerCase();
   for (const p of pages) {
@@ -54,14 +54,14 @@ function searchAllPages(pages: Page[], query: string, excludedIds: Set<number>):
 
 export default function MoveToDialog({ pageId, pageTree, onClose, onMove, position }: MoveToDialogProps) {
   const [search, setSearch] = useState('');
-  const [currentParentId, setCurrentParentId] = useState<number | null>(null);
-  const [breadcrumb, setBreadcrumb] = useState<Array<{ id: number; title: string }>>([]);
+  const [currentParentId, setCurrentParentId] = useState<string | null>(null);
+  const [breadcrumb, setBreadcrumb] = useState<Array<{ id: string; title: string }>>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Collect excluded IDs (self + descendants)
   const excludedIds = useMemo(() => {
-    const ids = new Set<number>();
-    function findAndCollect(pages: Page[], targetId: number): boolean {
+    const ids = new Set<string>();
+    function findAndCollect(pages: Page[], targetId: string): boolean {
       for (const p of pages) {
         if (p.id === targetId) {
           ids.add(...collectDescendantIds(p));

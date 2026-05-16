@@ -7,7 +7,7 @@ import { Plus, Hash, Lock } from 'lucide-react';
 import { Page } from '../api/pages';
 
 // Recursively check if a page ID exists in the tree
-function findPageInTree(pages: Page[], targetId: number): boolean {
+function findPageInTree(pages: Page[], targetId: string): boolean {
   for (const page of pages) {
     if (page.id === targetId) return true;
     if (page.children && findPageInTree(page.children, targetId)) return true;

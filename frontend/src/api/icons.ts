@@ -15,7 +15,7 @@ export async function checkIconName(name: string): Promise<boolean> {
   return data?.exists ?? false;
 }
 
-export async function useIconFromLibrary(iconName: string, pageId: number, spaceSlug: string): Promise<string> {
+export async function useIconFromLibrary(iconName: string, pageId: string, spaceSlug: string): Promise<string> {
   const { data } = await apiClient.post('/icons/use', {
     icon_name: iconName,
     page_id: pageId,

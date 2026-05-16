@@ -24,7 +24,7 @@ const schema = BlockNoteSchema.create({
 
 // Internal URL detection — match only URLs from this app's origin
 const APP_ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
-const INTERNAL_URL_RE = new RegExp(`^${APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/([^/]+)/p/(\\d+)(?:$|/)`);
+const INTERNAL_URL_RE = new RegExp(`^${APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/([^/]+)/p/([a-f0-9]{32})(?:$|/)`);
 const URL_RE = /^https?:\/\/.+/;
 
 // Override zh dictionary: reorganize groups + rename toggle headings
@@ -55,7 +55,7 @@ const customZh = {
 
 interface PageEditorProps {
   initialContent: string;
-  pageIdentity: { spaceSlug: string; pageId: number };
+  pageIdentity: { spaceSlug: string; pageId: string };
   onSyncStatusChange?: (status: 'unsaved' | 'syncing' | 'synced') => void;
   readOnly?: boolean;
 }

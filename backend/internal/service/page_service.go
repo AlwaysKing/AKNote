@@ -1,8 +1,10 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,7 +17,7 @@ import (
 	"github.com/alwaysking/mdlibrary/internal/repository"
 	"github.com/alwaysking/mdlibrary/pkg/filesystem"
 	"github.com/alwaysking/mdlibrary/pkg/frontmatter"
-	"github.com/google/uuid"
+	"github.com/alwaysking/mdlibrary/pkg/uuidutil"
 )
 
 type PageService struct {
@@ -152,7 +154,11 @@ func (s *PageService) RebuildCache(spaceSlug string) error {
 func (s *PageService) rebuildNodes(nodes []*model.PageNode, repo *repository.PageRepository) {
 	for _, node := range nodes {
 		if node.FilePath != "" {
+			// Read frontmatter to get or assign UUID
+			pageID := s.ensurePageUUID(node.FilePath)
+
 			created, err := repo.Create(&model.Page{
+				ID:        pageID,
 				Title:     node.Title,
 				FilePath:  node.FilePath,
 				SortOrder: float64(time.Now().UnixNano()),
@@ -167,15 +173,37 @@ func (s *PageService) rebuildNodes(nodes []*model.PageNode, repo *repository.Pag
 	}
 }
 
+// ensurePageUUID reads a .md file's frontmatter and ensures it has a UUID.
+// If the frontmatter already has an `id`, returns it.
+// If not, generates a new UUID, writes it into the frontmatter, and returns it.
+func (s *PageService) ensurePageUUID(relPath string) string {
+	absPath := filepath.Join(s.docsDir, relPath)
+	raw, err := os.ReadFile(absPath)
+	if err != nil {
+		return uuidutil.NewPageID()
+	}
+
+	fm, body, _ := frontmatter.Parse(raw)
+	if fm.ID != "" {
+		return fm.ID
+	}
+
+	// Generate and write UUID into frontmatter
+	fm.ID = uuidutil.NewPageID()
+	assembled := frontmatter.Render(fm, body)
+	os.WriteFile(absPath, assembled, 0644)
+	return fm.ID
+}
+
 // --- Helper methods ---
 
-func (s *PageService) resolveCoverURL(spaceSlug string, pageID int, coverPath string) string {
+func (s *PageService) resolveCoverURL(spaceSlug string, pageID string, coverPath string) string {
 	if coverPath == "" {
 		return ""
 	}
 	if strings.HasPrefix(coverPath, "./public/") {
 		assetPart := strings.TrimPrefix(coverPath, "./public/")
-		return fmt.Sprintf("/api/spaces/%s/pages/%d/assets/%s", spaceSlug, pageID, assetPart)
+		return fmt.Sprintf("/api/spaces/%s/pages/%s/assets/%s", spaceSlug, pageID, assetPart)
 	}
 	return coverPath
 }
@@ -193,8 +221,6 @@ func (s *PageService) toRelativeCover(coverURL string) string {
 }
 
 // cleanupLocalAsset removes a local asset file (icon image) from a page's public directory.
-// The iconURL is expected to be an API path like /api/spaces/{slug}/pages/{id}/assets/{uuid}/file.png
-// or a relative path like ./public/{uuid}/file.png.
 func (s *PageService) cleanupLocalAsset(spaceSlug string, pageFilePath string, iconURL string) {
 	var assetPart string
 	if strings.HasPrefix(iconURL, "/api/spaces/") {
@@ -297,7 +323,11 @@ func (s *PageService) enrichNodes(spaceSlug string, nodes []*model.PageNode, pat
 					node.Title = page.Title
 				}
 			} else {
+				// Ensure the .md file has a UUID in frontmatter
+				pageID := s.ensurePageUUID(node.FilePath)
+
 				created, err := repo.Create(&model.Page{
+					ID:        pageID,
 					Title:     node.Title,
 					FilePath:  node.FilePath,
 					SortOrder: float64(time.Now().UnixNano()),
@@ -327,7 +357,7 @@ func sortNodesByOrder(nodes []*model.PageNode) {
 	}
 }
 
-func (s *PageService) GetByID(spaceSlug string, pageID int) (*model.Page, error) {
+func (s *PageService) GetByID(spaceSlug string, pageID string) (*model.Page, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -345,6 +375,14 @@ func (s *PageService) GetByID(spaceSlug string, pageID int) (*model.Page, error)
 	}
 
 	fm, body, _ := frontmatter.Parse(raw)
+
+	// Ensure frontmatter has the page ID (repair if missing)
+	if fm.ID == "" {
+		fm.ID = pageID
+		assembled := frontmatter.Render(fm, body)
+		os.WriteFile(filePath, assembled, 0644)
+	}
+
 	if fm.Icon != "" {
 		page.Icon = fm.Icon
 	}
@@ -392,6 +430,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 	}
 
 	title := req.Title
+	pageID := uuidutil.NewPageID()
 
 	maxSort, _ := repo.MaxSortOrder()
 	sortOrder := maxSort + 1
@@ -416,7 +455,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 		title = s.resolveUniqueTitle(childAbsDir, title, "")
 
 		childRelPath := filepath.Join(childDir, title+".md")
-		fm := frontmatter.FrontmatterData{}
+		fm := frontmatter.FrontmatterData{ID: pageID}
 		if req.Icon != "" {
 			fm.Icon = req.Icon
 		}
@@ -426,6 +465,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 		}
 
 		page := &model.Page{
+			ID:        pageID,
 			Title:     title,
 			FilePath:  childRelPath,
 			Icon:      req.Icon,
@@ -444,7 +484,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 	title = s.resolveUniqueTitle(spaceDir, title, "")
 	relPath := filepath.Join(dirName, title+".md")
 
-	rootFm := frontmatter.FrontmatterData{}
+	rootFm := frontmatter.FrontmatterData{ID: pageID}
 	if req.Icon != "" {
 		rootFm.Icon = req.Icon
 	}
@@ -454,6 +494,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 	}
 
 	page := &model.Page{
+		ID:        pageID,
 		Title:     title,
 		FilePath:  relPath,
 		Icon:      req.Icon,
@@ -462,7 +503,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 	return repo.Create(page)
 }
 
-func (s *PageService) Update(spaceSlug string, pageID int, req *model.UpdatePageRequest) (*model.Page, error) {
+func (s *PageService) Update(spaceSlug string, pageID string, req *model.UpdatePageRequest) (*model.Page, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -487,7 +528,7 @@ func (s *PageService) Update(spaceSlug string, pageID int, req *model.UpdatePage
 	return repo.Update(pageID, req)
 }
 
-func (s *PageService) UpdateMeta(spaceSlug string, pageID int, req *model.UpdatePageMetaRequest) (*model.Page, error) {
+func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.UpdatePageMetaRequest) (*model.Page, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -580,7 +621,7 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID int, req *model.Update
 	return s.GetByID(spaceSlug, pageID)
 }
 
-func (s *PageService) Delete(spaceSlug string, pageID int) error {
+func (s *PageService) Delete(spaceSlug string, pageID string) error {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return err
@@ -635,7 +676,7 @@ func (s *PageService) Delete(spaceSlug string, pageID int) error {
 	return repo.Delete(pageID)
 }
 
-func (s *PageService) GetAssetPath(spaceSlug string, pageID int, assetPath string) (string, error) {
+func (s *PageService) GetAssetPath(spaceSlug string, pageID string, assetPath string) (string, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return "", err
@@ -670,7 +711,7 @@ func (s *PageService) GetAssetPath(spaceSlug string, pageID int, assetPath strin
 	return absPath, nil
 }
 
-func (s *PageService) UploadAsset(spaceSlug string, pageID int, filename string, content []byte) (string, error) {
+func (s *PageService) UploadAsset(spaceSlug string, pageID string, filename string, content []byte) (string, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return "", err
@@ -682,7 +723,7 @@ func (s *PageService) UploadAsset(spaceSlug string, pageID int, filename string,
 	}
 
 	pageDir := filepath.Dir(page.FilePath)
-	id := uuid.New().String()
+	id := uuidutil.NewPageID()
 
 	publicDir := filepath.Join(s.docsDir, pageDir, "public", id)
 	if err := os.MkdirAll(publicDir, 0755); err != nil {
@@ -812,8 +853,12 @@ func (s *PageService) RestoreFromTrash(spaceSlug string, trashRelPath string, sp
 		os.Rename(trashChildDir, targetChildDir)
 	}
 
+	// Ensure restored file has a UUID in frontmatter
+	pageID := s.ensurePageUUID(targetRelPath)
+
 	maxSort, _ := repo.MaxSortOrder()
 	page := &model.Page{
+		ID:        pageID,
 		Title:     title,
 		FilePath:  targetRelPath,
 		SortOrder: maxSort + 1,
@@ -834,8 +879,7 @@ func (s *PageService) PermanentDelete(spaceSlug string, trashRelPath string) err
 }
 
 // Duplicate creates a copy of a page (and its entire subtree) under an optional target parent.
-// If targetParentID is nil, the duplicate is placed at the space root.
-func (s *PageService) Duplicate(spaceSlug string, pageID int, targetParentID *int, spaceID int) (*model.Page, error) {
+func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID *string, spaceID int) (*model.Page, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -885,10 +929,20 @@ func (s *PageService) Duplicate(spaceSlug string, pageID int, targetParentID *in
 	// Resolve unique title in target directory
 	newTitle = s.resolveUniqueTitle(targetDir, newTitle, "")
 
-	// Write new .md file with same frontmatter + content
+	// Write new .md file with NEW UUID + same content
+	newPageID := uuidutil.NewPageID()
+	newFm := frontmatter.FrontmatterData{
+		ID:          newPageID,
+		Icon:        fm.Icon,
+		Cover:       fm.Cover,
+		FullPage:    fm.FullPage,
+		IconLarge:   fm.IconLarge,
+		CoverOffset: fm.CoverOffset,
+		Starred:     fm.Starred,
+	}
 	newRelPath := filepath.Join(targetRelDir, newTitle+".md")
 	newAbsPath := filepath.Join(s.docsDir, newRelPath)
-	fileBytes := frontmatter.Render(fm, body)
+	fileBytes := frontmatter.Render(newFm, body)
 	if err := os.WriteFile(newAbsPath, fileBytes, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write duplicate page: %w", err)
 	}
@@ -937,8 +991,7 @@ func copyDirRecursive(src, dst string) error {
 }
 
 // Move relocates a page (and its subtree) to a new parent.
-// If targetParentID is nil, the page is moved to the space root.
-func (s *PageService) Move(spaceSlug string, pageID int, targetParentID *int) (*model.Page, error) {
+func (s *PageService) Move(spaceSlug string, pageID string, targetParentID *string) (*model.Page, error) {
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -1056,17 +1109,15 @@ func (s *PageService) ListRecent(spaceSlug string, limit int) ([]*model.Page, er
 
 // ==================== Subpage Block Maintenance ====================
 //
-// Subpage blocks are HTML comments in markdown: <!-- subpage:123 -->
+// Subpage blocks are HTML comments in markdown: <!-- subpage:UUID -->
 // They represent direct child pages. All maintenance is done server-side
 // so the frontend only needs to render them.
 
-// subpageRe matches <!-- subpage:123 --> lines
-var subpageRe = regexp.MustCompile(`^<!--\s*subpage:(\d+)\s*-->$`)
+// subpageRe matches <!-- subpage:UUID --> lines (32-char hex UUID without dashes)
+var subpageRe = regexp.MustCompile(`^<!--\s*subpage:([a-f0-9]{32})\s*-->$`)
 
 // getDirectChildIDs returns the database IDs of a page's direct child pages.
-// Children are determined by filesystem structure: if page is "space/parent.md",
-// children are *.md files in "space/parent/" directory.
-func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePath string) ([]int, error) {
+func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePath string) ([]string, error) {
 	pageName := strings.TrimSuffix(filepath.Base(filePath), ".md")
 	parentDir := filepath.Dir(filePath)
 	childDir := filepath.Join(parentDir, pageName)
@@ -1074,11 +1125,10 @@ func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePat
 
 	entries, err := os.ReadDir(childAbsDir)
 	if err != nil {
-		// No child directory = no children
 		return nil, nil
 	}
 
-	var ids []int
+	var ids []string
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
@@ -1092,34 +1142,29 @@ func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePat
 	return ids, nil
 }
 
-// maintainSubpageBlocks ensures the markdown body has exactly one <!-- subpage:ID -->
+// maintainSubpageBlocks ensures the markdown body has exactly one <!-- subpage:UUID -->
 // for each direct child page, removing stale ones and appending missing ones.
-// Returns the (possibly modified) body.
 func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRepository, filePath string) string {
 	childIDs, err := s.getDirectChildIDs(repo, filePath)
 	if err != nil {
 		return body
 	}
 
-	// Parse existing subpage lines from body
-	childIDSet := make(map[int]bool)
+	childIDSet := make(map[string]bool)
 	for _, id := range childIDs {
 		childIDSet[id] = true
 	}
 
-	existingSubpageSet := make(map[int]bool)
+	existingSubpageSet := make(map[string]bool)
 	var lines []string
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
 		matches := subpageRe.FindStringSubmatch(trimmed)
 		if len(matches) == 2 {
-			id := 0
-			fmt.Sscanf(matches[1], "%d", &id)
-			if id > 0 {
-				existingSubpageSet[id] = true
-			}
+			id := matches[1]
+			existingSubpageSet[id] = true
 			// Only keep this line if the ID is a valid direct child
-			if id > 0 && childIDSet[id] {
+			if childIDSet[id] {
 				lines = append(lines, line)
 			}
 			// else: stale subpage line, drop it
@@ -1129,7 +1174,7 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 	}
 
 	// Find missing subpages (child exists but no line in body)
-	var missing []int
+	var missing []string
 	for _, id := range childIDs {
 		if !existingSubpageSet[id] {
 			missing = append(missing, id)
@@ -1137,10 +1182,7 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 	}
 
 	if len(missing) == 0 && len(existingSubpageSet) == len(childIDSet) {
-		// Nothing changed
-		// Rejoin and check equality
 		result := strings.Join(lines, "\n")
-		// Clean up trailing newlines to match original behavior
 		result = strings.TrimRight(result, "\n")
 		if result == strings.TrimRight(body, "\n") {
 			return body
@@ -1150,7 +1192,7 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 
 	// Append missing subpages at the end
 	for _, id := range missing {
-		lines = append(lines, fmt.Sprintf("<!-- subpage:%d -->", id))
+		lines = append(lines, fmt.Sprintf("<!-- subpage:%s -->", id))
 	}
 
 	result := strings.Join(lines, "\n")
@@ -1158,7 +1200,7 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 }
 
 // appendSubpageToParent adds <!-- subpage:childID --> to the end of parent page's content.
-func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, parentID int, childID int) {
+func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, parentID string, childID string) {
 	parent, err := repo.GetByID(parentID)
 	if err != nil {
 		return
@@ -1173,7 +1215,7 @@ func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, par
 	fm, body, _ := frontmatter.Parse(raw)
 
 	// Check if subpage line already exists
-	target := fmt.Sprintf("<!-- subpage:%d -->", childID)
+	target := fmt.Sprintf("<!-- subpage:%s -->", childID)
 	for _, line := range strings.Split(body, "\n") {
 		if strings.TrimSpace(line) == target {
 			return // Already exists
@@ -1191,7 +1233,7 @@ func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, par
 }
 
 // removeSubpageFromParent removes <!-- subpage:childID --> from parent page's content.
-func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, parentID int, childID int) {
+func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, parentID string, childID string) {
 	parent, err := repo.GetByID(parentID)
 	if err != nil {
 		return
@@ -1205,7 +1247,7 @@ func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, p
 
 	fm, body, _ := frontmatter.Parse(raw)
 
-	target := fmt.Sprintf("<!-- subpage:%d -->", childID)
+	target := fmt.Sprintf("<!-- subpage:%s -->", childID)
 	var lines []string
 	for _, line := range strings.Split(body, "\n") {
 		if strings.TrimSpace(line) != target {
@@ -1225,16 +1267,13 @@ func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, p
 }
 
 // findParentPageID determines the parent page ID from a child page's file_path.
-// For example, "space/parent/child.md" → looks up "space/parent.md" → returns parent's ID.
 // Returns nil if the page is at root level (no parent).
-func (s *PageService) findParentPageID(repo *repository.PageRepository, filePath string) *int {
+func (s *PageService) findParentPageID(repo *repository.PageRepository, filePath string) *string {
 	dir := filepath.Dir(filePath)
-	// If the directory is the root (e.g., "space"), there's no parent
 	if !strings.Contains(dir, "/") && !strings.Contains(dir, string(filepath.Separator)) {
 		return nil
 	}
 
-	// Parent .md file is at dir/../dirname.md where dirname is the last path segment
 	parentDir := filepath.Dir(dir)
 	parentName := filepath.Base(dir)
 	parentPath := filepath.Join(parentDir, parentName+".md")
@@ -1244,4 +1283,243 @@ func (s *PageService) findParentPageID(repo *repository.PageRepository, filePath
 		return nil
 	}
 	return &parent.ID
+}
+
+// ==================== UUID Migration ====================
+//
+// MigrateToUUIDs performs a one-time migration of all per-space .cache.db
+// files from INTEGER primary keys to UUID (TEXT) primary keys.
+// It also writes UUIDs into every .md file's frontmatter and rewrites
+// subpage comments from integer to UUID format.
+
+// oldSubpageRe matches the legacy integer-format subpage comments.
+var oldSubpageRe = regexp.MustCompile(`<!--\s*subpage:(\d+)\s*-->`)
+
+func (s *PageService) MigrateToUUIDs() error {
+	entries, err := os.ReadDir(s.docsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read docs directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.Name() == "public" {
+			continue
+		}
+
+		spaceDir := filepath.Join(s.docsDir, entry.Name())
+		if err := s.migrateSpaceDB(spaceDir); err != nil {
+			log.Printf("Warning: failed to migrate space %s: %v", entry.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// migrateSpaceDB migrates a single space's .cache.db from integer to UUID primary keys.
+func (s *PageService) migrateSpaceDB(spaceDir string) error {
+	// Skip if already migrated
+	markerPath := filepath.Join(spaceDir, ".uuid-migrated")
+	if _, err := os.Stat(markerPath); err == nil {
+		return nil
+	}
+
+	cachePath := filepath.Join(spaceDir, ".cache.db")
+	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+		// No cache DB yet — write marker and skip
+		os.WriteFile(markerPath, []byte("migrated"), 0644)
+		return nil
+	}
+
+	// Open old DB and check if migration is needed
+	oldDB, err := sql.Open("sqlite3", cachePath)
+	if err != nil {
+		return fmt.Errorf("failed to open old cache db: %w", err)
+	}
+
+	needsMigration, err := s.checkCacheNeedsMigration(oldDB)
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+	if !needsMigration {
+		oldDB.Close()
+		os.WriteFile(markerPath, []byte("migrated"), 0644)
+		return nil
+	}
+
+	log.Printf("Migrating space cache to UUID: %s", filepath.Base(spaceDir))
+
+	// Read all old rows with integer IDs
+	type oldPageRow struct {
+		ID           int
+		Title        string
+		FilePath     string
+		Icon         string
+		CoverURL     string
+		FullPage     bool
+		SortOrder    float64
+		IsStarred    bool
+		LastAccessed *time.Time
+	}
+
+	rows, err := oldDB.Query(`SELECT id, title, file_path, icon, cover_url, full_page, sort_order, COALESCE(is_starred, 0), last_accessed_at FROM pages`)
+	if err != nil {
+		return fmt.Errorf("failed to read old pages: %w", err)
+	}
+
+	var oldPages []oldPageRow
+	for rows.Next() {
+		var p oldPageRow
+		var icon, coverURL sql.NullString
+		var lastAccessed sql.NullTime
+		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &icon, &coverURL, &p.FullPage, &p.SortOrder, &p.IsStarred, &lastAccessed); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan old page: %w", err)
+		}
+		if icon.Valid {
+			p.Icon = icon.String
+		}
+		if coverURL.Valid {
+			p.CoverURL = coverURL.String
+		}
+		if lastAccessed.Valid {
+			p.LastAccessed = &lastAccessed.Time
+		}
+		oldPages = append(oldPages, p)
+	}
+	rows.Close()
+
+	// Build mapping: oldIntID → newUUID
+	// Also write UUIDs into .md frontmatters
+	idMap := make(map[int]string)
+	for _, p := range oldPages {
+		absPath := filepath.Join(s.docsDir, p.FilePath)
+		raw, err := os.ReadFile(absPath)
+		if err != nil {
+			// File may have been deleted; generate UUID anyway
+			idMap[p.ID] = uuidutil.NewPageID()
+			continue
+		}
+
+		fm, body, _ := frontmatter.Parse(raw)
+		if fm.ID != "" {
+			// Already has UUID (maybe manually set or partial migration)
+			idMap[p.ID] = fm.ID
+		} else {
+			newID := uuidutil.NewPageID()
+			fm.ID = newID
+			assembled := frontmatter.Render(fm, body)
+			os.WriteFile(absPath, assembled, 0644)
+			idMap[p.ID] = newID
+		}
+	}
+
+	// Rewrite subpage comments in all .md files within the space
+	filepath.WalkDir(spaceDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		// Skip .trash directory
+		if strings.Contains(path, string(filepath.Separator)+".trash") {
+			return nil
+		}
+
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		fm, body, _ := frontmatter.Parse(raw)
+
+		changed := false
+		newBody := oldSubpageRe.ReplaceAllStringFunc(body, func(match string) string {
+			subMatch := oldSubpageRe.FindStringSubmatch(match)
+			if len(subMatch) == 2 {
+				var oldID int
+				if _, err := fmt.Sscanf(subMatch[1], "%d", &oldID); err == nil {
+					if newUUID, ok := idMap[oldID]; ok {
+						changed = true
+						return fmt.Sprintf("<!-- subpage:%s -->", newUUID)
+					}
+				}
+			}
+			return match
+		})
+
+		if changed {
+			assembled := frontmatter.Render(fm, newBody)
+			os.WriteFile(path, assembled, 0644)
+		}
+		return nil
+	})
+
+	// Close old DB before replacing it
+	oldDB.Close()
+
+	// Delete old .cache.db
+	if err := os.Remove(cachePath); err != nil {
+		return fmt.Errorf("failed to remove old cache db: %w", err)
+	}
+
+	// Create new .cache.db with TEXT primary key schema
+	newDB, err := repository.OpenSpaceDB(spaceDir)
+	if err != nil {
+		return fmt.Errorf("failed to create new cache db: %w", err)
+	}
+	repo := repository.NewPageRepository(newDB)
+
+	for _, p := range oldPages {
+		newID, ok := idMap[p.ID]
+		if !ok {
+			newID = uuidutil.NewPageID()
+		}
+		page := &model.Page{
+			ID:        newID,
+			Title:     p.Title,
+			FilePath:  p.FilePath,
+			Icon:      p.Icon,
+			CoverURL:  p.CoverURL,
+			FullPage:  p.FullPage,
+			SortOrder: p.SortOrder,
+			IsStarred: p.IsStarred,
+		}
+		if _, err := repo.Create(page); err != nil {
+			log.Printf("Warning: failed to create page %s in new cache: %v", p.FilePath, err)
+		}
+	}
+
+	newDB.Close()
+
+	// Write migration marker
+	os.WriteFile(markerPath, []byte("migrated"), 0644)
+	log.Printf("Space migration complete: %s (%d pages)", filepath.Base(spaceDir), len(oldPages))
+	return nil
+}
+
+// checkCacheNeedsMigration checks if the pages table uses INTEGER primary key.
+func (s *PageService) checkCacheNeedsMigration(db *sql.DB) (bool, error) {
+	rows, err := db.Query("PRAGMA table_info(pages)")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var dfltValue interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false, err
+		}
+		if name == "id" && strings.Contains(strings.ToUpper(colType), "INTEGER") {
+			return true, nil
+		}
+	}
+	return false, nil
 }

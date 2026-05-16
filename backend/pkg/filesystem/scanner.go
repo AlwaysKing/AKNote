@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/alwaysking/mdlibrary/internal/model"
+	"github.com/alwaysking/mdlibrary/pkg/frontmatter"
+	"github.com/alwaysking/mdlibrary/pkg/uuidutil"
 )
 
 type Scanner struct {
@@ -47,13 +49,11 @@ func (s *Scanner) ScanPageTree(spaceSlug string) ([]*model.PageNode, error) {
 		return nil, fmt.Errorf("space not found: %s", spaceSlug)
 	}
 
-	// Use actual directory name as pathPrefix so FilePath stores the real path
 	nodes, err := s.scanDirectory(spacePath, dirName)
 	if err != nil {
 		return nil, err
 	}
 
-	// Sort by title
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Title < nodes[j].Title
 	})
@@ -62,15 +62,12 @@ func (s *Scanner) ScanPageTree(spaceSlug string) ([]*model.PageNode, error) {
 }
 
 // resolveSpaceDir finds the actual directory for a space slug.
-// Returns the full path and the directory name.
 func (s *Scanner) resolveSpaceDir(spaceSlug string) (string, string) {
-	// Try exact slug match first
 	exactPath := filepath.Join(s.docsDir, spaceSlug)
 	if info, err := os.Stat(exactPath); err == nil && info.IsDir() {
 		return exactPath, spaceSlug
 	}
 
-	// Scan directories and match by generated slug
 	entries, err := os.ReadDir(s.docsDir)
 	if err != nil {
 		return "", ""
@@ -87,9 +84,6 @@ func (s *Scanner) resolveSpaceDir(spaceSlug string) (string, string) {
 }
 
 // scanDirectory scans a directory for pages.
-// Each .md file is a page. If a directory with the same name as the .md file exists,
-// it contains the page's children.
-// pathPrefix is the relative path prefix (e.g. "space" or "space/parent").
 func (s *Scanner) scanDirectory(dirPath string, pathPrefix string) ([]*model.PageNode, error) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -114,12 +108,15 @@ func (s *Scanner) scanDirectory(dirPath string, pathPrefix string) ([]*model.Pag
 		// Only process .md files as pages
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
 			title := strings.TrimSuffix(entry.Name(), ".md")
+			relPath := pathPrefix + "/" + entry.Name()
+			nodeID := readOrCreatePageID(filepath.Join(dirPath, entry.Name()))
+
 			node := &model.PageNode{
-				ID:        generateID(title),
+				ID:        nodeID,
 				Title:     title,
 				Icon:      "",
 				SortOrder: 0,
-				FilePath:  pathPrefix + "/" + entry.Name(),
+				FilePath:  relPath,
 				Children:  nil,
 			}
 
@@ -137,7 +134,6 @@ func (s *Scanner) scanDirectory(dirPath string, pathPrefix string) ([]*model.Pag
 		}
 	}
 
-	// Sort by title
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Title < nodes[j].Title
 	})
@@ -149,13 +145,19 @@ func generateSlug(name string) string {
 	return name
 }
 
-func generateID(title string) int {
-	hash := 0
-	for _, r := range title {
-		hash = hash*31 + int(r)
+// readOrCreatePageID reads the frontmatter from a .md file to get its ID.
+// If no ID exists in frontmatter, generates a new UUID (but does NOT write it —
+// writing is done later by ensurePageUUID in page_service.go during DB enrichment).
+func readOrCreatePageID(absPath string) string {
+	raw, err := os.ReadFile(absPath)
+	if err != nil {
+		return uuidutil.NewPageID()
 	}
-	if hash < 0 {
-		hash = -hash
+
+	fm, _, _ := frontmatter.Parse(raw)
+	if fm.ID != "" {
+		return fm.ID
 	}
-	return hash % 1000000
+
+	return uuidutil.NewPageID()
 }

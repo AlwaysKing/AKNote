@@ -7,13 +7,13 @@ interface PageState {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
-  fetchPage: (spaceSlug: string, pageId: number, signal?: AbortSignal) => Promise<void>;
-  savePage: (spaceSlug: string, pageId: number, content: string) => Promise<void>;
-  createPage: (spaceSlug: string, title: string, parentId?: number) => Promise<Page>;
-  deletePage: (spaceSlug: string, pageId: number) => Promise<void>;
-  updateMetadata: (spaceSlug: string, pageId: number, data: any) => Promise<void>;
-  duplicatePage: (spaceSlug: string, pageId: number, targetParentId?: number | null) => Promise<Page>;
-  movePage: (spaceSlug: string, pageId: number, targetParentId: number | null) => Promise<Page>;
+  fetchPage: (spaceSlug: string, pageId: string, signal?: AbortSignal) => Promise<void>;
+  savePage: (spaceSlug: string, pageId: string, content: string) => Promise<void>;
+  createPage: (spaceSlug: string, title: string, parentId?: string) => Promise<Page>;
+  deletePage: (spaceSlug: string, pageId: string) => Promise<void>;
+  updateMetadata: (spaceSlug: string, pageId: string, data: any) => Promise<void>;
+  duplicatePage: (spaceSlug: string, pageId: string, targetParentId?: string | null) => Promise<Page>;
+  movePage: (spaceSlug: string, pageId: string, targetParentId: string | null) => Promise<Page>;
   clearCurrentPage: () => void;
   refreshPageTree: () => Promise<void>;
 }

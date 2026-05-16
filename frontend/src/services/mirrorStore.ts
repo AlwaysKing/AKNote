@@ -6,13 +6,13 @@
  */
 
 const DB_NAME = 'mdlibrary';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'page_mirrors';
 
 export interface PageMirror {
   id?: number;
   spaceSlug: string;
-  pageId: number;
+  pageId: string;
   content: string;
   createdAt: number;
   synced: boolean;
@@ -78,7 +78,7 @@ export async function initMirrorDB(): Promise<void> {
   }
 }
 
-export async function createMirror(spaceSlug: string, pageId: number, content: string): Promise<void> {
+export async function createMirror(spaceSlug: string, pageId: string, content: string): Promise<void> {
   if (!dbAvailable) return;
   try {
     const store = await getStore('readwrite');
@@ -116,7 +116,7 @@ export async function getAllPendingMirrors(): Promise<PageMirror[]> {
 /**
  * 获取某页最新的镜像（不限同步状态）。用于页面加载时检查是否有未同步内容。
  */
-export async function getLatestMirror(spaceSlug: string, pageId: number): Promise<PageMirror | null> {
+export async function getLatestMirror(spaceSlug: string, pageId: string): Promise<PageMirror | null> {
   if (!dbAvailable) return null;
   try {
     const store = await getStore('readonly');

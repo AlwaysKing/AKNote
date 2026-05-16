@@ -234,7 +234,7 @@ function SpaceMenuItem({ space, isCurrent, pageTree, onClose, isOpen, onMouseEnt
 }
 
 // Find path from root to target page in the tree
-function findPagePath(pages: Page[], targetId: number, path: Page[] = []): Page[] | null {
+function findPagePath(pages: Page[], targetId: string, path: Page[] = []): Page[] | null {
   for (const page of pages) {
     const newPath = [...path, page];
     if (page.id === targetId) return newPath;
@@ -253,7 +253,7 @@ export default function Breadcrumb({ pageTitle, spaceSlug, actions }: Breadcrumb
   const { currentSpace, pageTree, spaces } = useSpaceStore();
   const { sidebarCollapsed, toggleSidebar } = useOutletContext<{ sidebarCollapsed: boolean; toggleSidebar: () => void }>();
   const { pageId } = useParams<{ pageId: string }>();
-  const currentPageId = pageId ? parseInt(pageId) : null;
+  const currentPageId = pageId || null;
   const pagePath = currentPageId ? findPagePath(pageTree, currentPageId) : null;
   const [activeItem, setActiveItem] = useState<ActiveItem>(null);
   const [activeSpaceId, setActiveSpaceId] = useState<number | null>(null);

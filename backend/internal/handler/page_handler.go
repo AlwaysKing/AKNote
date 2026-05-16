@@ -69,13 +69,7 @@ func (h *PageHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	if !h.checkSpaceAccess(w, r, slug) {
 		return
 	}
-	pageIDStr := chi.URLParam(r, "id")
-
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	page, err := h.pageService.GetByID(slug, pageID)
 	if err != nil {
@@ -132,13 +126,7 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !h.checkSpaceAccess(w, r, slug) {
 		return
 	}
-	pageIDStr := chi.URLParam(r, "id")
-
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	var req model.UpdatePageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -161,13 +149,7 @@ func (h *PageHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 	if !h.checkSpaceAccess(w, r, slug) {
 		return
 	}
-	pageIDStr := chi.URLParam(r, "id")
-
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	var req model.UpdatePageMetaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -190,13 +172,7 @@ func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !h.checkSpaceAccess(w, r, slug) {
 		return
 	}
-	pageIDStr := chi.URLParam(r, "id")
-
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	if err := h.pageService.Delete(slug, pageID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -208,13 +184,7 @@ func (h *PageHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *PageHandler) ServeAsset(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
-	pageIDStr := chi.URLParam(r, "id")
-
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	// Extract asset path from the wildcard: /api/spaces/:slug/pages/:id/assets/*
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
@@ -248,15 +218,10 @@ func (h *PageHandler) Duplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pageIDStr := chi.URLParam(r, "id")
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	var req struct {
-		TargetParentID *int `json:"target_parent_id"`
+		TargetParentID *string `json:"target_parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -292,15 +257,10 @@ func (h *PageHandler) Move(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pageIDStr := chi.URLParam(r, "id")
-	pageID, err := strconv.Atoi(pageIDStr)
-	if err != nil {
-		http.Error(w, "Invalid page ID", http.StatusBadRequest)
-		return
-	}
+	pageID := chi.URLParam(r, "id")
 
 	var req struct {
-		TargetParentID *int `json:"target_parent_id"`
+		TargetParentID *string `json:"target_parent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

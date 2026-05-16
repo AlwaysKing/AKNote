@@ -25,7 +25,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const { starredPages, recentPages } = useSpaceStore();
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
-  const [sidebarExpandedIds, setSidebarExpandedIds] = useState<Set<number>>(new Set());
+  const [sidebarExpandedIds, setSidebarExpandedIds] = useState<Set<string>>(new Set());
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -137,7 +137,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     );
   }
 
-  const handleSidebarToggleExpand = (pageId: number, expanded: boolean) => {
+  const handleSidebarToggleExpand = (pageId: string, expanded: boolean) => {
     setSidebarExpandedIds(prev => {
       const next = new Set(prev);
       if (expanded) next.add(pageId); else next.delete(pageId);

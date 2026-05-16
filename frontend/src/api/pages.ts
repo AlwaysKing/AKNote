@@ -1,8 +1,8 @@
 import apiClient from './client';
 
 export interface Page {
-  id: number;
-  space_id: number;
+  id: string;
+  space_id: string;
   title: string;
   file_path: string;
   icon?: string;
@@ -48,41 +48,41 @@ export const pagesApi = {
     return response.data;
   },
 
-  get: async (spaceSlug: string, pageId: number, signal?: AbortSignal): Promise<Page> => {
+  get: async (spaceSlug: string, pageId: string, signal?: AbortSignal): Promise<Page> => {
     const response = await apiClient.get<Page>(`/spaces/${spaceSlug}/pages/${pageId}`, { signal });
     return response.data;
   },
 
-  create: async (spaceSlug: string, data: { title: string; parent_id?: number }): Promise<Page> => {
+  create: async (spaceSlug: string, data: { title: string; parent_id?: string }): Promise<Page> => {
     const response = await apiClient.post<Page>(`/spaces/${spaceSlug}/pages`, data);
     return response.data;
   },
 
-  update: async (spaceSlug: string, pageId: number, content: string): Promise<Page> => {
+  update: async (spaceSlug: string, pageId: string, content: string): Promise<Page> => {
     const response = await apiClient.put<Page>(`/spaces/${spaceSlug}/pages/${pageId}`, { content });
     return response.data;
   },
 
-  updateMetadata: async (spaceSlug: string, pageId: number, data: PageMetadata): Promise<Page> => {
+  updateMetadata: async (spaceSlug: string, pageId: string, data: PageMetadata): Promise<Page> => {
     const response = await apiClient.put<Page>(`/spaces/${spaceSlug}/pages/${pageId}/meta`, data);
     return response.data;
   },
 
-  duplicate: async (spaceSlug: string, pageId: number, targetParentId?: number | null): Promise<Page> => {
+  duplicate: async (spaceSlug: string, pageId: string, targetParentId?: string | null): Promise<Page> => {
     const response = await apiClient.post<Page>(`/spaces/${spaceSlug}/pages/${pageId}/duplicate`, {
       target_parent_id: targetParentId ?? null,
     });
     return response.data;
   },
 
-  move: async (spaceSlug: string, pageId: number, targetParentId: number | null): Promise<Page> => {
+  move: async (spaceSlug: string, pageId: string, targetParentId: string | null): Promise<Page> => {
     const response = await apiClient.put<Page>(`/spaces/${spaceSlug}/pages/${pageId}/move`, {
       target_parent_id: targetParentId,
     });
     return response.data;
   },
 
-  delete: async (spaceSlug: string, pageId: number): Promise<void> => {
+  delete: async (spaceSlug: string, pageId: string): Promise<void> => {
     await apiClient.delete(`/spaces/${spaceSlug}/pages/${pageId}`);
   },
 

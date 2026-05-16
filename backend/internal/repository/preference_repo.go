@@ -46,7 +46,7 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 
 	for rows.Next() {
 		var slug string
-		var pageID sql.NullInt64
+		var pageID sql.NullString
 		var expandedJSON string
 		if err := rows.Scan(&slug, &pageID, &expandedJSON); err != nil {
 			return nil, fmt.Errorf("failed to scan space preference: %w", err)
@@ -54,11 +54,10 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 
 		sp := &model.SpacePreference{}
 		if pageID.Valid {
-			id := int(pageID.Int64)
-			sp.LastViewedPageID = &id
+			sp.LastViewedPageID = &pageID.String
 		}
 		if err := json.Unmarshal([]byte(expandedJSON), &sp.ExpandedPageIDs); err != nil {
-			sp.ExpandedPageIDs = []int{}
+			sp.ExpandedPageIDs = []string{}
 		}
 		prefs.SpacePreferences[slug] = sp
 	}
@@ -80,7 +79,7 @@ func (r *PreferenceRepository) UpsertGlobalPref(userID int, lastActiveSpaceSlug 
 	return nil
 }
 
-func (r *PreferenceRepository) UpsertSpacePref(userID int, spaceSlug string, lastViewedPageID *int, expandedPageIDs *[]int) error {
+func (r *PreferenceRepository) UpsertSpacePref(userID int, spaceSlug string, lastViewedPageID *string, expandedPageIDs *[]string) error {
 	var pageID interface{}
 	if lastViewedPageID != nil {
 		pageID = *lastViewedPageID

@@ -113,7 +113,7 @@ interface CoverImageProps {
   coverUrl: string | null | undefined;
   coverOffset?: number;
   spaceSlug: string;
-  pageId: number;
+  pageId: string;
 }
 
 export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSlug, pageId }: CoverImageProps) {
@@ -190,7 +190,7 @@ export default function CoverImage({ coverUrl, coverOffset: savedOffset, spaceSl
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('page_id', String(pageId));
+      formData.append('page_id', pageId);
       formData.append('space_slug', spaceSlug);
 
       // Add to cover library if checked

@@ -8,6 +8,7 @@ import (
 )
 
 type FrontmatterData struct {
+	ID          string `yaml:"id,omitempty"`
 	Icon        string `yaml:"icon,omitempty"`
 	Cover       string `yaml:"cover,omitempty"`
 	FullPage    *bool  `yaml:"full_page,omitempty"`
@@ -18,7 +19,7 @@ type FrontmatterData struct {
 
 // IsEmpty returns true if all fields are zero values.
 func (fm FrontmatterData) IsEmpty() bool {
-	return fm.Icon == "" && fm.Cover == "" && fm.FullPage == nil && fm.IconLarge == nil && fm.CoverOffset == nil && fm.Starred == nil
+	return fm.ID == "" && fm.Icon == "" && fm.Cover == "" && fm.FullPage == nil && fm.IconLarge == nil && fm.CoverOffset == nil && fm.Starred == nil
 }
 
 // Parse extracts frontmatter and body from raw markdown file bytes.

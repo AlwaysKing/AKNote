@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import apiClient from '../api/client';
 
 interface SpacePreference {
-  last_viewed_page_id?: number | null;
-  expanded_page_ids: number[];
+  last_viewed_page_id?: string | null;
+  expanded_page_ids: string[];
 }
 
 interface UserPreferences {
@@ -16,10 +16,10 @@ interface PreferenceState {
   isLoaded: boolean;
   fetchPreferences: () => Promise<void>;
   setLastActiveSpace: (slug: string) => void;
-  setLastViewedPage: (spaceSlug: string, pageId: number) => void;
-  setExpandedPageIds: (spaceSlug: string, ids: number[]) => void;
-  getExpandedPageIds: (spaceSlug: string) => number[];
-  getLastViewedPageId: (spaceSlug: string) => number | null | undefined;
+  setLastViewedPage: (spaceSlug: string, pageId: string) => void;
+  setExpandedPageIds: (spaceSlug: string, ids: string[]) => void;
+  getExpandedPageIds: (spaceSlug: string) => string[];
+  getLastViewedPageId: (spaceSlug: string) => string | null | undefined;
 }
 
 // Debounced save: accumulate changes and send one request
@@ -71,7 +71,7 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
     scheduleSave();
   },
 
-  setLastViewedPage: (spaceSlug: string, pageId: number) => {
+  setLastViewedPage: (spaceSlug: string, pageId: string) => {
     set((state) => {
       const prefs = { ...state.preferences, space_preferences: { ...state.preferences.space_preferences } };
       ensureSpacePrefs(prefs, spaceSlug).last_viewed_page_id = pageId;
@@ -82,7 +82,7 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
     scheduleSave();
   },
 
-  setExpandedPageIds: (spaceSlug: string, ids: number[]) => {
+  setExpandedPageIds: (spaceSlug: string, ids: string[]) => {
     set((state) => {
       const prefs = { ...state.preferences, space_preferences: { ...state.preferences.space_preferences } };
       const sp = { ...ensureSpacePrefs(prefs, spaceSlug) };

@@ -34,14 +34,14 @@ export default function PageViewPage() {
     const controller = new AbortController();
     // 延迟到下一个微任务，让导航先生效；如果组件已卸载则不发出请求
     const timer = setTimeout(() => {
-      fetchPage(spaceSlug, parseInt(pageId), controller.signal);
+      fetchPage(spaceSlug, pageId, controller.signal);
     }, 0);
     const spaces = useSpaceStore.getState().spaces;
     const space = spaces.find((s) => s.slug === spaceSlug);
     if (space) {
       setCurrentSpace(space);
     }
-    usePreferenceStore.getState().setLastViewedPage(spaceSlug, parseInt(pageId));
+    usePreferenceStore.getState().setLastViewedPage(spaceSlug, pageId);
     useSpaceStore.getState().fetchRecent(spaceSlug);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [spaceSlug, pageId, fetchPage, setCurrentSpace]);
@@ -79,11 +79,11 @@ export default function PageViewPage() {
 
   // Subscribe to syncModule events for syncing/synced status
   useEffect(() => {
-    const pageIdNum = pageId ? parseInt(pageId) : 0;
-    if (!spaceSlug || !pageIdNum) return;
+    const pageIdStr = pageId || '';
+    if (!spaceSlug || !pageIdStr) return;
 
     const unsubscribe = onSyncStatusChange((event) => {
-      if (event.spaceSlug === spaceSlug && event.pageId === pageIdNum) {
+      if (event.spaceSlug === spaceSlug && event.pageId === pageIdStr) {
         if (event.type === 'syncing') {
           setSyncStatus('syncing');
         } else if (event.type === 'synced') {
@@ -98,8 +98,7 @@ export default function PageViewPage() {
   // On page load: check for pending mirrors from previous sessions
   useEffect(() => {
     if (!spaceSlug || !pageId) return;
-    const pageIdNum = parseInt(pageId);
-    getLatestMirror(spaceSlug, pageIdNum).then(mirror => {
+    getLatestMirror(spaceSlug, pageId).then(mirror => {
       if (mirror && !mirror.synced) {
         // There is unsynced content from a previous session — trigger immediate sync
         flushSync();
@@ -111,14 +110,14 @@ export default function PageViewPage() {
   const handleFullPageToggle = useCallback(async () => {
     if (!spaceSlug || !pageId || !currentPage) return;
     const newFullPage = !currentPage.full_page;
-    await updateMetadata(spaceSlug, parseInt(pageId), { full_page: newFullPage });
+    await updateMetadata(spaceSlug, pageId, { full_page: newFullPage });
   }, [spaceSlug, pageId, currentPage, updateMetadata]);
 
   const handleTitleBlur = useCallback(async () => {
     const newTitle = titleRef.current?.textContent?.trim() || '';
     const currentTitle = usePageStore.getState().currentPage?.title;
     if (newTitle && newTitle !== currentTitle && spaceSlug && pageId) {
-      await updateMetadata(spaceSlug, parseInt(pageId), { title: newTitle });
+      await updateMetadata(spaceSlug, pageId, { title: newTitle });
       await refreshPageTree();
     } else if (!newTitle && titleRef.current) {
       titleRef.current.textContent = currentTitle || '未命名页面';

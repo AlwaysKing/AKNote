@@ -3,7 +3,7 @@ package model
 import "time"
 
 type Page struct {
-	ID        int       `json:"id" db:"id"`
+	ID        string    `json:"id" db:"id"`
 	SpaceID   int       `json:"space_id" db:"-"` // filled from context, not stored in space DB
 	Title     string    `json:"title" db:"title"`
 	FilePath  string    `json:"file_path" db:"file_path"`
@@ -22,7 +22,7 @@ type Page struct {
 }
 
 type PageNode struct {
-	ID        int         `json:"id"`
+	ID        string      `json:"id"`
 	Title     string      `json:"title"`
 	Icon      string      `json:"icon"`
 	SortOrder float64     `json:"sort_order"`
@@ -32,7 +32,7 @@ type PageNode struct {
 
 type CreatePageRequest struct {
 	Title     string `json:"title"`
-	ParentID  *int   `json:"parent_id,omitempty"`
+	ParentID  *string `json:"parent_id,omitempty"`
 	Icon      string `json:"icon"`
 }
 

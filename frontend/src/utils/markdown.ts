@@ -128,7 +128,7 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
     }
 
     // Page reference: <!-- pageref:123 -->
-    const pagerefMatch = trimmed.match(/^<!--\s*pageref:(\d+)\s*-->$/);
+    const pagerefMatch = trimmed.match(/^<!--\s*pageref:([a-f0-9]{32})\s*-->$/);
     if (pagerefMatch) {
       blocks.push({
         type: 'pageReference',
@@ -150,7 +150,7 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
     }
 
     // Subpage: <!-- subpage:123 -->
-    const subpageMatch = trimmed.match(/^<!--\s*subpage:(\d+)\s*-->$/);
+    const subpageMatch = trimmed.match(/^<!--\s*subpage:([a-f0-9]{32})\s*-->$/);
     if (subpageMatch) {
       blocks.push({
         type: 'subpage',
@@ -321,7 +321,9 @@ export function blocksToMarkdown(blocks: any[]): string {
         break;
 
       case 'pageReference':
-        lines.push(`<!-- pageref:${block.props?.pageId || '0'} -->`);
+        if (block.props?.pageId) {
+          lines.push(`<!-- pageref:${block.props.pageId} -->`);
+        }
         break;
 
       case 'bookmark':
@@ -329,7 +331,9 @@ export function blocksToMarkdown(blocks: any[]): string {
         break;
 
       case 'subpage':
-        lines.push(`<!-- subpage:${block.props?.pageId || '0'} -->`);
+        if (block.props?.pageId) {
+          lines.push(`<!-- subpage:${block.props.pageId} -->`);
+        }
         break;
 
       case 'table':

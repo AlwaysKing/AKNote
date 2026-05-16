@@ -10,12 +10,12 @@ export default function PageTree() {
     currentSpace ? getExpandedPageIds(currentSpace.slug) : []
   );
 
-  const handleToggleExpand = (pageId: number, expanded: boolean) => {
+  const handleToggleExpand = (pageId: string, expanded: boolean) => {
     if (!currentSpace) return;
     const current = getExpandedPageIds(currentSpace.slug);
     const next = expanded
       ? [...current, pageId]
-      : current.filter((id: number) => id !== pageId);
+      : current.filter((id: string) => id !== pageId);
     setExpandedPageIds(currentSpace.slug, next);
   };
 

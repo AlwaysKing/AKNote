@@ -24,7 +24,7 @@ import { pagesApi } from '../api/pages';
 export interface SyncStatusEvent {
   type: 'syncing' | 'synced' | 'error';
   spaceSlug: string;
-  pageId: number;
+  pageId: string;
   error?: string;
 }
 
@@ -54,7 +54,7 @@ function emit(event: SyncStatusEvent): void {
 interface MirrorGroup {
   key: string;
   spaceSlug: string;
-  pageId: number;
+  pageId: string;
   mirrors: PageMirror[];
   latest: PageMirror;
 }

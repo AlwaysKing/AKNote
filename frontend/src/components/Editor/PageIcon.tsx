@@ -8,7 +8,7 @@ interface PageIconProps {
   icon: string | null | undefined;
   iconLarge?: boolean;
   spaceSlug?: string;
-  pageId?: number;
+  pageId?: string;
   compact?: boolean;
   onOpenChange?: (open: boolean) => void;
   onChange?: () => void;
@@ -200,7 +200,7 @@ export default function PageIcon({ icon, iconLarge, spaceSlug, pageId, compact, 
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('page_id', String(pageId));
+      formData.append('page_id', pageId);
       formData.append('space_slug', spaceSlug);
       if (addToLibrary) {
         formData.append('add_to_library', 'true');

@@ -45,25 +45,20 @@ func scanPage(scanner interface{ Scan(...interface{}) error }) (*model.Page, err
 
 func (r *PageRepository) Create(page *model.Page) (*model.Page, error) {
 	query := `
-		INSERT INTO pages (title, file_path, icon, cover_url, sort_order)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO pages (id, title, file_path, icon, cover_url, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.db.Exec(query, page.Title, page.FilePath,
+	_, err := r.db.Exec(query, page.ID, page.Title, page.FilePath,
 		page.Icon, page.CoverURL, page.SortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create page: %w", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	return r.GetByID(int(id))
+	return r.GetByID(page.ID)
 }
 
-func (r *PageRepository) GetByID(id int) (*model.Page, error) {
+func (r *PageRepository) GetByID(id string) (*model.Page, error) {
 	query := `SELECT ` + pageColumns + ` FROM pages WHERE id = ?`
 
 	page, err := scanPage(r.db.QueryRow(query, id))
@@ -110,7 +105,7 @@ func (r *PageRepository) ListAll() ([]*model.Page, error) {
 	return pages, nil
 }
 
-func (r *PageRepository) Update(id int, page *model.UpdatePageRequest) (*model.Page, error) {
+func (r *PageRepository) Update(id string, page *model.UpdatePageRequest) (*model.Page, error) {
 	if page.Title != "" {
 		query := `UPDATE pages SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 		if _, err := r.db.Exec(query, page.Title, id); err != nil {
@@ -126,7 +121,7 @@ func (r *PageRepository) Update(id int, page *model.UpdatePageRequest) (*model.P
 	return r.GetByID(id)
 }
 
-func (r *PageRepository) UpdateMeta(id int, req *model.UpdatePageMetaRequest) (*model.Page, error) {
+func (r *PageRepository) UpdateMeta(id string, req *model.UpdatePageMetaRequest) (*model.Page, error) {
 	setParts := []string{}
 	args := []interface{}{}
 
@@ -166,13 +161,13 @@ func (r *PageRepository) UpdateMeta(id int, req *model.UpdatePageMetaRequest) (*
 	return r.GetByID(id)
 }
 
-func (r *PageRepository) UpdateFilePath(id int, filePath string) error {
+func (r *PageRepository) UpdateFilePath(id string, filePath string) error {
 	query := "UPDATE pages SET file_path = ? WHERE id = ?"
 	_, err := r.db.Exec(query, filePath, id)
 	return err
 }
 
-func (r *PageRepository) Delete(id int) error {
+func (r *PageRepository) Delete(id string) error {
 	query := "DELETE FROM pages WHERE id = ?"
 
 	result, err := r.db.Exec(query, id)
@@ -207,7 +202,7 @@ func (r *PageRepository) MaxSortOrder() (float64, error) {
 }
 
 // TouchAccess updates last_accessed_at to now for a page (tracks recent access)
-func (r *PageRepository) TouchAccess(id int) error {
+func (r *PageRepository) TouchAccess(id string) error {
 	_, err := r.db.Exec("UPDATE pages SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?", id)
 	return err
 }

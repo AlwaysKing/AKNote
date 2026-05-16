@@ -15,7 +15,7 @@ export async function checkCoverName(name: string): Promise<boolean> {
   return data?.exists ?? false;
 }
 
-export async function useCoverFromLibrary(coverName: string, pageId: number, spaceSlug: string): Promise<string> {
+export async function useCoverFromLibrary(coverName: string, pageId: string, spaceSlug: string): Promise<string> {
   const { data } = await apiClient.post('/covers/use', {
     cover_name: coverName,
     page_id: pageId,

@@ -11,8 +11,8 @@ import { showToast } from '../Toast';
 interface PageTreeItemProps {
   page: Page;
   level: number;
-  expandedPageIds: Set<number>;
-  onToggleExpand: (pageId: number, expanded: boolean) => void;
+  expandedPageIds: Set<string>;
+  onToggleExpand: (pageId: string, expanded: boolean) => void;
 }
 
 export default function PageTreeItem({ page, level, expandedPageIds, onToggleExpand }: PageTreeItemProps) {
@@ -108,7 +108,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
     let target = `/s/${spaceSlug}`;
     if (isActive) {
       const tree = useSpaceStore.getState().pageTree;
-      const findTarget = (nodes: Page[], parentId: number | null): string | null => {
+      const findTarget = (nodes: Page[], parentId: string | null): string | null => {
         for (const node of nodes) {
           if (node.id === page.id) {
             const remaining = nodes.filter(s => s.id !== page.id);
@@ -199,7 +199,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
     }
   };
 
-  const handleMove = async (targetParentId: number | null) => {
+  const handleMove = async (targetParentId: string | null) => {
     if (!spaceSlug) return;
     setShowMoveDialog(false);
     try {

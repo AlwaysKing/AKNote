@@ -97,7 +97,7 @@ func (db *DB) migrate() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
 			space_slug TEXT NOT NULL,
-			last_viewed_page_id INTEGER,
+			last_viewed_page_id TEXT,
 			expanded_page_ids TEXT DEFAULT '[]',
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -168,7 +168,7 @@ func OpenSpaceDB(spaceDir string) (*sql.DB, error) {
 
 	// Create pages table (no space_id — each DB is for one space)
 	schema := `CREATE TABLE IF NOT EXISTS pages (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id TEXT PRIMARY KEY,
 		title TEXT NOT NULL,
 		file_path TEXT NOT NULL,
 		icon TEXT,

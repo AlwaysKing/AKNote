@@ -65,6 +65,11 @@ func main() {
 		log.Printf("Warning: failed to sync spaces from filesystem: %v", err)
 	}
 
+	// Migrate page IDs from integer to UUID (one-time)
+	if err := pageService.MigrateToUUIDs(); err != nil {
+		log.Printf("Warning: failed to migrate page IDs to UUID: %v", err)
+	}
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)

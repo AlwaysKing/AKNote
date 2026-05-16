@@ -5,7 +5,7 @@ import { FileText } from 'lucide-react';
 import { useSpaceStore } from '../../stores/spaceStore';
 import { pagesApi, Page } from '../../api/pages';
 
-function findPageInTree(tree: Page[], pageId: number): Page | null {
+function findPageInTree(tree: Page[], pageId: string): Page | null {
   for (const page of tree) {
     if (page.id === pageId) return page;
     if (page.children) {
@@ -17,7 +17,7 @@ function findPageInTree(tree: Page[], pageId: number): Page | null {
 }
 
 function SubpageComponent({ block, editor }: any) {
-  const pageId = parseInt(block.props.pageId || '0');
+  const pageId = block.props.pageId || '';
   const navigate = useNavigate();
   const { currentSpace, pageTree } = useSpaceStore();
   const [page, setPage] = useState<Page | null>(null);
@@ -137,7 +137,7 @@ function SubpageComponent({ block, editor }: any) {
 export const SubpageBlockSpec = createReactBlockSpec(
   {
     type: 'subpage',
-    propSchema: { pageId: { default: '0' } },
+    propSchema: { pageId: { default: '' } },
     content: 'none',
   },
   { render: SubpageComponent },
