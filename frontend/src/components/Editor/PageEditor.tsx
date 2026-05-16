@@ -529,16 +529,24 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     const content = lastDocBlock.content;
     const lastIsEmpty = !content || (Array.isArray(content) && content.length === 0);
 
-    if (lastIsEmpty) {
+    // Check if the last block is input-capable (has editable text)
+    // Non-input blocks like subpage, bookmark, pageReference can't receive cursor
+    const container = editorRef.current;
+    const blockOuters = container?.querySelectorAll('.bn-block-outer');
+    const lastOuter = blockOuters?.[blockOuters.length - 1];
+    const lastIsInput = lastOuter ? isInputBlock(lastOuter as HTMLElement) : false;
+
+    if (lastIsEmpty && lastIsInput) {
       editor.setTextCursorPosition(lastDocBlock, 'end');
     } else {
+      // Last block is non-input (subpage, bookmark, etc.) or has content → insert new paragraph after it
       const inserted = editor.insertBlocks([{ type: 'paragraph' } as any], lastDocBlock, 'after');
       if (inserted.length > 0) {
         editor.setTextCursorPosition(inserted[0], 'start');
       }
     }
     editor.focus();
-  }, [editor, readOnly]);
+  }, [editor, readOnly, isInputBlock]);
 
   // Listen for clicks on the scroll container's empty space below editor
   useEffect(() => {
