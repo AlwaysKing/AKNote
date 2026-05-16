@@ -4,7 +4,7 @@ import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
 import { zh } from '@blocknote/core/locales';
 import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
-import { blockNoteComponents, setBlockSelection, getSelectedBlockIds } from './BlockNoteComponents';
+import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenuOpen } from './BlockNoteComponents';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
 import { BookmarkBlockSpec } from './BookmarkBlock';
 import { SubpageBlockSpec } from './SubpageBlock';
@@ -264,12 +264,19 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     // Keyboard: Escape toggles selection, Delete/Backspace removes selected blocks
     // Uses module-level getSelectedBlockIds() to avoid stale closure issues
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') return;
+
+      // If a floating menu is open, let it handle Escape first
+      const hasOpenMenu = isDragMenuOpen();
+
       const ids = getSelectedBlockIds();
       if (ids.length > 0) {
         if (e.key === 'Escape') {
+          if (hasOpenMenu) return; // Let menu handle it
           e.preventDefault();
           e.stopImmediatePropagation();
           updateSelection([]);
+          setBlockSelection(null);
         } else if (e.key === 'Backspace' || e.key === 'Delete') {
           e.preventDefault();
           e.stopImmediatePropagation();
@@ -285,6 +292,9 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         e.stopImmediatePropagation();
         const currentBlock = editor.getTextCursorPosition().block;
         updateSelection([currentBlock.id as string]);
+        // Exit editing mode — blur editor to hide cursor
+        const pmEl = container?.querySelector('.ProseMirror') as HTMLElement;
+        if (pmEl) pmEl.blur();
       }
     };
 
@@ -370,7 +380,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       isDragging = false;
     };
 
-    // Click: clear selection (unless after drag or on side menu)
+    // Click: clear selection (unless after drag, on side menu, or floating menu is open)
+    // Uses getSelectedBlockIds() to also catch selections from drag handle click
     const handleClick = (e: MouseEvent) => {
       if (dragOccurred) {
         dragOccurred = false;
@@ -378,8 +389,12 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       }
       // Don't clear selection when clicking side menu (drag handle, add button)
       if ((e.target as HTMLElement).closest('.bn-side-menu, [data-floating-ui-focusable]')) return;
-      if (selectedIds.length > 0) {
+      // If a floating menu is open, this click just closes the menu — don't deselect yet
+      const hasOpenMenu = isDragMenuOpen();
+      if (hasOpenMenu) return;
+      if (getSelectedBlockIds().length > 0) {
         updateSelection([]);
+        setBlockSelection(null);
       }
     };
 

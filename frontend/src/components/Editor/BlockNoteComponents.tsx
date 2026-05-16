@@ -54,6 +54,11 @@ const SideMenuRoot: React.FC<{ className?: string; children?: ReactNode; [key: s
 // 动态样式表管理：用于 block 选中高亮，避免 ProseMirror 重渲染覆盖 DOM class
 let blockSelectionStyleEl: HTMLStyleElement | null = null;
 let currentSelectedIds: string[] = [];
+let dragMenuOpen = false;
+
+export function isDragMenuOpen(): boolean {
+  return dragMenuOpen;
+}
 
 export function getSelectedBlockIds(): string[] {
   return [...currentSelectedIds];
@@ -398,6 +403,7 @@ const GenericMenuRoot: React.FC<{
 
   const setOpen = useCallback((open: boolean) => {
     setIsOpen(open);
+    dragMenuOpen = open;
     onOpenChange?.(open);
   }, [onOpenChange]);
 
