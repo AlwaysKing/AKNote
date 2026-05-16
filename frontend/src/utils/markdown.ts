@@ -127,34 +127,37 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
       continue;
     }
 
-    // Page reference: <!-- pageref:123 -->
-    const pagerefMatch = trimmed.match(/^<!--\s*pageref:([a-f0-9]{32})\s*-->$/);
-    if (pagerefMatch) {
+    // Page reference: <page-ref data-id="uuid"></page-ref> (legacy: <!-- pageref:uuid -->)
+    const pagerefId = trimmed.match(/^<page-ref\s+data-id="([a-f0-9]{32})"\s*><\/page-ref>$/)?.[1]
+      || trimmed.match(/^<!--\s*pageref:([a-f0-9]{32})\s*-->$/)?.[1];
+    if (pagerefId) {
       blocks.push({
         type: 'pageReference',
-        props: { pageId: pagerefMatch[1] },
+        props: { pageId: pagerefId },
       });
       i++;
       continue;
     }
 
-    // Bookmark: <!-- bookmark:https://example.com -->
-    const bookmarkMatch = trimmed.match(/^<!--\s*bookmark:(https?:\/\/.+)\s*-->$/);
-    if (bookmarkMatch) {
+    // Bookmark: <book-mark data-url="url"></book-mark> (legacy: <!-- bookmark:url -->)
+    const bookmarkUrl = trimmed.match(/^<book-mark\s+data-url="([^"]+)"\s*><\/book-mark>$/)?.[1]
+      || trimmed.match(/^<!--\s*bookmark:(https?:\/\/.+)\s*-->$/)?.[1];
+    if (bookmarkUrl) {
       blocks.push({
         type: 'bookmark',
-        props: { url: bookmarkMatch[1] },
+        props: { url: bookmarkUrl },
       });
       i++;
       continue;
     }
 
-    // Subpage: <!-- subpage:123 -->
-    const subpageMatch = trimmed.match(/^<!--\s*subpage:([a-f0-9]{32})\s*-->$/);
-    if (subpageMatch) {
+    // Subpage: <sub-page data-id="uuid"></sub-page> (legacy: <!-- subpage:uuid -->)
+    const subpageId = trimmed.match(/^<sub-page\s+data-id="([a-f0-9]{32})"\s*><\/sub-page>$/)?.[1]
+      || trimmed.match(/^<!--\s*subpage:([a-f0-9]{32})\s*-->$/)?.[1];
+    if (subpageId) {
       blocks.push({
         type: 'subpage',
-        props: { pageId: subpageMatch[1] },
+        props: { pageId: subpageId },
       });
       i++;
       continue;
@@ -322,17 +325,19 @@ export function blocksToMarkdown(blocks: any[]): string {
 
       case 'pageReference':
         if (block.props?.pageId) {
-          lines.push(`<!-- pageref:${block.props.pageId} -->`);
+          lines.push(`<page-ref data-id="${block.props.pageId}"></page-ref>`);
         }
         break;
 
       case 'bookmark':
-        lines.push(`<!-- bookmark:${block.props?.url || ''} -->`);
+        if (block.props?.url) {
+          lines.push(`<book-mark data-url="${block.props.url}"></book-mark>`);
+        }
         break;
 
       case 'subpage':
         if (block.props?.pageId) {
-          lines.push(`<!-- subpage:${block.props.pageId} -->`);
+          lines.push(`<sub-page data-id="${block.props.pageId}"></sub-page>`);
         }
         break;
 

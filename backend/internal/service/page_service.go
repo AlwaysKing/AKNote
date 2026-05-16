@@ -1109,12 +1109,32 @@ func (s *PageService) ListRecent(spaceSlug string, limit int) ([]*model.Page, er
 
 // ==================== Subpage Block Maintenance ====================
 //
-// Subpage blocks are HTML comments in markdown: <!-- subpage:UUID -->
-// They represent direct child pages. All maintenance is done server-side
-// so the frontend only needs to render them.
+// Subpage blocks are custom HTML tags in markdown: <sub-page data-id="uuid"></sub-page>
+// For backward compatibility, the old comment format <!-- subpage:UUID --> is also read.
+// All maintenance is done server-side so the frontend only needs to render them.
 
-// subpageRe matches <!-- subpage:UUID --> lines (32-char hex UUID without dashes)
-var subpageRe = regexp.MustCompile(`^<!--\s*subpage:([a-f0-9]{32})\s*-->$`)
+// subpageTagRe matches the new custom tag format.
+var subpageTagRe = regexp.MustCompile(`^<sub-page\s+data-id="([a-f0-9]{32})"\s*></sub-page>$`)
+
+// subpageCommentRe matches the legacy HTML comment format (for backward-compatible reading).
+var subpageCommentRe = regexp.MustCompile(`^<!--\s*subpage:([a-f0-9]{32})\s*-->$`)
+
+// parseSubpageID tries both tag and comment formats, returns the UUID or empty string.
+func parseSubpageID(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if m := subpageTagRe.FindStringSubmatch(trimmed); len(m) == 2 {
+		return m[1]
+	}
+	if m := subpageCommentRe.FindStringSubmatch(trimmed); len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
+
+// formatSubpageTag returns the custom tag for a subpage ID.
+func formatSubpageTag(id string) string {
+	return fmt.Sprintf(`<sub-page data-id="%s"></sub-page>`, id)
+}
 
 // getDirectChildIDs returns the database IDs of a page's direct child pages.
 func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePath string) ([]string, error) {
@@ -1142,8 +1162,9 @@ func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePat
 	return ids, nil
 }
 
-// maintainSubpageBlocks ensures the markdown body has exactly one <!-- subpage:UUID -->
+// maintainSubpageBlocks ensures the markdown body has exactly one <sub-page data-id="UUID"></sub-page>
 // for each direct child page, removing stale ones and appending missing ones.
+// Reads both new tag format and legacy comment format; always writes new tag format.
 func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRepository, filePath string) string {
 	childIDs, err := s.getDirectChildIDs(repo, filePath)
 	if err != nil {
@@ -1157,17 +1178,24 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 
 	existingSubpageSet := make(map[string]bool)
 	var lines []string
+	changed := false
 	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
-		matches := subpageRe.FindStringSubmatch(trimmed)
-		if len(matches) == 2 {
-			id := matches[1]
+		id := parseSubpageID(line)
+		if id != "" {
 			existingSubpageSet[id] = true
-			// Only keep this line if the ID is a valid direct child
 			if childIDSet[id] {
-				lines = append(lines, line)
+				// Re-write in new tag format (migrates legacy comments on the fly)
+				newTag := formatSubpageTag(id)
+				if strings.TrimSpace(line) != newTag {
+					lines = append(lines, newTag)
+					changed = true
+				} else {
+					lines = append(lines, line)
+				}
+			} else {
+				// Stale subpage line, drop it
+				changed = true
 			}
-			// else: stale subpage line, drop it
 		} else {
 			lines = append(lines, line)
 		}
@@ -1181,7 +1209,7 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 		}
 	}
 
-	if len(missing) == 0 && len(existingSubpageSet) == len(childIDSet) {
+	if len(missing) == 0 && !changed {
 		result := strings.Join(lines, "\n")
 		result = strings.TrimRight(result, "\n")
 		if result == strings.TrimRight(body, "\n") {
@@ -1192,14 +1220,14 @@ func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRe
 
 	// Append missing subpages at the end
 	for _, id := range missing {
-		lines = append(lines, fmt.Sprintf("<!-- subpage:%s -->", id))
+		lines = append(lines, formatSubpageTag(id))
 	}
 
 	result := strings.Join(lines, "\n")
 	return strings.TrimRight(result, "\n")
 }
 
-// appendSubpageToParent adds <!-- subpage:childID --> to the end of parent page's content.
+// appendSubpageToParent adds <sub-page data-id="childID"></sub-page> to the end of parent page's content.
 func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, parentID string, childID string) {
 	parent, err := repo.GetByID(parentID)
 	if err != nil {
@@ -1214,15 +1242,16 @@ func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, par
 
 	fm, body, _ := frontmatter.Parse(raw)
 
-	// Check if subpage line already exists
-	target := fmt.Sprintf("<!-- subpage:%s -->", childID)
+	// Check if subpage line already exists (match both tag and comment format)
 	for _, line := range strings.Split(body, "\n") {
-		if strings.TrimSpace(line) == target {
+		id := parseSubpageID(line)
+		if id == childID {
 			return // Already exists
 		}
 	}
 
-	// Append
+	// Append in new tag format
+	target := formatSubpageTag(childID)
 	if body != "" && !strings.HasSuffix(body, "\n") {
 		body += "\n"
 	}
@@ -1232,7 +1261,7 @@ func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, par
 	os.WriteFile(filePath, assembled, 0644)
 }
 
-// removeSubpageFromParent removes <!-- subpage:childID --> from parent page's content.
+// removeSubpageFromParent removes the subpage tag/comment for childID from parent page's content.
 func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, parentID string, childID string) {
 	parent, err := repo.GetByID(parentID)
 	if err != nil {
@@ -1247,12 +1276,13 @@ func (s *PageService) removeSubpageFromParent(repo *repository.PageRepository, p
 
 	fm, body, _ := frontmatter.Parse(raw)
 
-	target := fmt.Sprintf("<!-- subpage:%s -->", childID)
 	var lines []string
 	for _, line := range strings.Split(body, "\n") {
-		if strings.TrimSpace(line) != target {
-			lines = append(lines, line)
+		id := parseSubpageID(line)
+		if id == childID {
+			continue // Remove this subpage line
 		}
+		lines = append(lines, line)
 	}
 
 	newBody := strings.Join(lines, "\n")
@@ -1450,7 +1480,7 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 				if _, err := fmt.Sscanf(subMatch[1], "%d", &oldID); err == nil {
 					if newUUID, ok := idMap[oldID]; ok {
 						changed = true
-						return fmt.Sprintf("<!-- subpage:%s -->", newUUID)
+						return formatSubpageTag(newUUID)
 					}
 				}
 			}
