@@ -330,9 +330,12 @@ h4[contenteditable],
   font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
 }
 
-/* Placeholder text */
+/* Placeholder text — only show when editor has focus */
 .bn-editor .bn-block-content [data-placeholder]::before {
   color: #c4c3c0 !important;
+}
+.bn-editor:not(:focus-within) .bn-block-content[data-is-empty-and-focused]::after {
+  content: none !important;
 }
 
 /* Selection */
