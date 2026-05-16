@@ -1315,6 +1315,9 @@ func (s *PageService) MigrateToUUIDs() error {
 		}
 	}
 
+	// Clear any cached repo connections so subsequent requests open the fresh (post-migration) DBs
+	s.CloseAll()
+
 	return nil
 }
 
@@ -1350,6 +1353,10 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 	}
 
 	log.Printf("Migrating space cache to UUID: %s", filepath.Base(spaceDir))
+
+	// Ensure columns that may have been added later exist (safe no-op if already present)
+	oldDB.Exec("ALTER TABLE pages ADD COLUMN is_starred BOOLEAN DEFAULT 0")
+	oldDB.Exec("ALTER TABLE pages ADD COLUMN last_accessed_at DATETIME")
 
 	// Read all old rows with integer IDs
 	type oldPageRow struct {
