@@ -370,8 +370,21 @@ export default function PageTree() {
       to: { parentId: toParentId, afterId: toAfterId },
     });
 
+    // Build human-readable description for the toast
+    const activePage = active.data.current?.page as Page | undefined;
+    const activeTitle = activePage?.title || '未命名页面';
+
+    // Find target parent name for description
+    let targetName: string;
+    if (toParentId) {
+      const targetParent = findPageInTree(pageTree, toParentId);
+      targetName = targetParent?.page?.title || '未命名页面';
+    } else {
+      targetName = '根目录';
+    }
+
     // Show toast with undo button
-    showToastWithAction('已移动页面', '撤销', async () => {
+    showToastWithAction(`已将「${activeTitle}」移动到「${targetName}」`, '撤销', async () => {
       await useUndoStore.getState().undo();
     });
 
