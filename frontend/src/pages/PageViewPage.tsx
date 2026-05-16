@@ -33,8 +33,10 @@ export default function PageViewPage() {
     if (!spaceSlug || !pageId) return;
     const controller = new AbortController();
     // 延迟到下一个微任务，让导航先生效；如果组件已卸载则不发出请求
-    const timer = setTimeout(() => {
-      fetchPage(spaceSlug, pageId, controller.signal);
+    const timer = setTimeout(async () => {
+      await fetchPage(spaceSlug, pageId, controller.signal);
+      // fetchRecent 在 fetchPage 完成后调用，确保 TouchAccess 已更新
+      useSpaceStore.getState().fetchRecent(spaceSlug);
     }, 0);
     const spaces = useSpaceStore.getState().spaces;
     const space = spaces.find((s) => s.slug === spaceSlug);
@@ -42,7 +44,6 @@ export default function PageViewPage() {
       setCurrentSpace(space);
     }
     usePreferenceStore.getState().setLastViewedPage(spaceSlug, pageId);
-    useSpaceStore.getState().fetchRecent(spaceSlug);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [spaceSlug, pageId, fetchPage, setCurrentSpace]);
 
