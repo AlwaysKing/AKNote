@@ -383,10 +383,23 @@ export default function PageTree() {
       targetName = '根目录';
     }
 
-    // Show toast with undo button
-    showToastWithAction(`已将「${activeTitle}」移动到「${targetName}」`, '撤销', async () => {
-      await useUndoStore.getState().undo();
-    });
+    // Show toast with undo and visit buttons
+    const movedPageId = active.id as string;
+    showToastWithAction(`已将「${activeTitle}」移动到「${targetName}」`, [
+      {
+        label: '访问',
+        onClick: () => {
+          const slug = currentSpace?.slug;
+          if (slug) window.location.href = `/s/${slug}/p/${movedPageId}`;
+        },
+      },
+      {
+        label: '撤销',
+        onClick: async () => {
+          await useUndoStore.getState().undo();
+        },
+      },
+    ]);
 
     refreshPageTree();
   }, [currentSpace, pageTree, overInfo, movePage, refreshPageTree, pushAction]);

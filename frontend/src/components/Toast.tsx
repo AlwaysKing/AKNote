@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 
+interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: number;
   message: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
+  actions?: ToastAction[];
 }
 
 let toastQueue: ToastItem[] = [];
@@ -24,9 +26,8 @@ function showToast(message: string, duration = 2000) {
   }, duration);
 }
 
-function showToastWithAction(message: string, actionLabel: string, onAction: () => void, duration = 5000) {
+function showToastWithAction(message: string, actions: ToastAction[], duration = 5000) {
   const id = nextId++;
-  // Dismiss callback: also triggers the action cleanup
   const dismiss = () => {
     toastQueue = toastQueue.filter(t => t.id !== id);
     setToastsExternal?.(toastQueue);
@@ -34,13 +35,13 @@ function showToastWithAction(message: string, actionLabel: string, onAction: () 
   toastQueue = [...toastQueue, {
     id,
     message,
-    action: {
-      label: actionLabel,
+    actions: actions.map(a => ({
+      label: a.label,
       onClick: () => {
-        onAction();
+        a.onClick();
         dismiss();
       },
-    },
+    })),
   }];
   setToastsExternal?.(toastQueue);
   setTimeout(dismiss, duration);
@@ -55,13 +56,13 @@ function ToastContainer() {
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none">
       {toasts.map(t => (
-        <ToastMessage key={t.id} message={t.message} action={t.action} />
+        <ToastMessage key={t.id} message={t.message} actions={t.actions} />
       ))}
     </div>
   );
 }
 
-function ToastMessage({ message, action }: { message: string; action?: ToastItem['action'] }) {
+function ToastMessage({ message, actions }: { message: string; actions?: ToastAction[] }) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -78,14 +79,15 @@ function ToastMessage({ message, action }: { message: string; action?: ToastItem
     >
       <div className="flex items-center gap-3">
         <span>{message}</span>
-        {action && (
+        {actions?.map((action, i) => (
           <button
+            key={i}
             onClick={action.onClick}
             className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
           >
             {action.label}
           </button>
-        )}
+        ))}
       </div>
     </div>
   );
