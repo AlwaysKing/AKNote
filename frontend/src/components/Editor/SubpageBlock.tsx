@@ -23,13 +23,41 @@ function SubpageComponent({ block, editor }: any) {
   const { currentSpace, pageTree } = useSpaceStore();
   const [page, setPage] = useState<Page | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [creating, setCreating] = useState(false);
+  // 使用 useRef 作为 StrictMode 守卫：ref 更新是同步的，StrictMode 双重执行 effect 时能正确读到
+  const creatingGuardRef = useRef(false);
 
   // Detect stack position (hooks must be before early returns)
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [stackPos, setStackPos] = useState<'first' | 'middle' | 'last' | null>(null);
 
+  // Auto-create child page when pageId is empty (inserted from slash menu)
   useEffect(() => {
-    if (!pageId) { setNotFound(true); return; }
+    if (pageId || creatingGuardRef.current) return;
+    const slug = currentSpace?.slug;
+    if (!slug) return;
+    // Get current page ID from URL
+    const currentPageId = window.location.pathname.match(/\/p\/([^/]+)$/)?.[1];
+    if (!currentPageId) { setNotFound(true); return; }
+
+    creatingGuardRef.current = true;
+    setCreating(true);
+    pagesApi.create(slug, { title: '未命名页面', parent_id: currentPageId })
+      .then(newPage => {
+        editor.updateBlock(block.id, { type: 'subpage', props: { pageId: newPage.id } } as any);
+        // Notify sidebar
+        document.dispatchEvent(new CustomEvent('subpage-created', { detail: { pageId: newPage.id } }));
+        useSpaceStore.getState().refreshAll();
+      })
+      .catch(() => {
+        setNotFound(true);
+        setCreating(false);
+        creatingGuardRef.current = false;
+      });
+  }, [pageId, currentSpace?.slug]);
+
+  useEffect(() => {
+    if (!pageId) return;
     // Try pageTree first
     const found = findPageInTree(pageTree, pageId);
     if (found) {
@@ -77,6 +105,17 @@ function SubpageComponent({ block, editor }: any) {
       else setStackPos(null);
     }
   });
+
+  if (!pageId && creating) {
+    return (
+      <div className="py-1">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-notion-sidebarBg text-notion-textSecondary text-sm animate-pulse">
+          <FileText className="w-4 h-4 flex-shrink-0" strokeWidth={1.7} />
+          <span>创建子页面中...</span>
+        </div>
+      </div>
+    );
+  }
 
   if (notFound || !pageId) {
     return (

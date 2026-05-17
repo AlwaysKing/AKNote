@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext } from '@blocknote/react';
-import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core';
+import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext, SuggestionMenuController } from '@blocknote/react';
+import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems } from '@blocknote/core';
+import { getDefaultReactSlashMenuItems } from '@blocknote/react';
 import { zh } from '@blocknote/core/locales';
 import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
@@ -37,8 +38,6 @@ const customZh = {
     heading_2: { ...zh.slash_menu.heading_2, group: '基础区块' },
     heading_3: { ...zh.slash_menu.heading_3, group: '基础区块' },
     heading_4: { ...zh.slash_menu.heading_4, group: '基础区块' },
-    heading_5: { ...zh.slash_menu.heading_5, group: '基础区块' },
-    heading_6: { ...zh.slash_menu.heading_6, group: '基础区块' },
     toggle_heading: { ...zh.slash_menu.toggle_heading, group: '基础区块', title: '一级折叠标题' },
     toggle_heading_2: { ...zh.slash_menu.toggle_heading_2, group: '基础区块', title: '二级折叠标题' },
     toggle_heading_3: { ...zh.slash_menu.toggle_heading_3, group: '基础区块', title: '三级折叠标题' },
@@ -53,6 +52,82 @@ const customZh = {
     paragraph: { ...zh.slash_menu.paragraph, group: '列表' },
   },
 };
+
+// Custom slash menu: default items filtered + subpage + toggle heading 4
+// Desired order for 基础区块: heading → heading_2 → heading_3 → heading_4 → toggle_heading → toggle_heading_2 → toggle_heading_3 → toggle_heading_4(custom)
+const BASE_BLOCK_ORDER: Record<string, number> = {
+  heading: 0,
+  heading_2: 1,
+  heading_3: 2,
+  heading_4: 3,
+  toggle_heading: 4,
+  toggle_heading_2: 5,
+  toggle_heading_3: 6,
+  toggle_heading_4: 7,
+};
+
+function getCustomSlashMenuItems(editor: any) {
+  const defaults = getDefaultReactSlashMenuItems(editor);
+  // Remove heading_5, heading_6 from defaults
+  const filtered = defaults.filter((item: any) =>
+    item.key !== 'heading_5' && item.key !== 'heading_6'
+  );
+  // Sort 基础区块 items to: headings first, then toggle headings
+  filtered.sort((a: any, b: any) => {
+    const aOrder = BASE_BLOCK_ORDER[a.key];
+    const bOrder = BASE_BLOCK_ORDER[b.key];
+    if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder;
+    return 0;
+  });
+  return [
+    ...filtered,
+    {
+      title: '四级折叠标题',
+      subtext: '可折叠的四级标题',
+      aliases: ['toggle_heading_4', 'toggle4'],
+      group: '基础区块',
+      icon: <svg viewBox="0 0 24 24" style={{ width: '18px', height: '18px', fill: 'currentColor' }}><path d="M12.8 5.6H4v2h7.2l-1.6 1.6L11 10.8l3.8-3.8-3.8-3.8-1.4 1.4 1.2 1zM4 14h8.8l-1.6 1.6L12.6 17l3.8-3.8-3.8-3.8-1.4 1.4 1.2 1H4v2z"/></svg>,
+      onItemClick: () => {
+        const currentBlock = editor.getTextCursorPosition().block;
+        if (currentBlock.content === undefined) return;
+        const blockContent = currentBlock.content;
+        const isSlashOnly = Array.isArray(blockContent) && blockContent.length === 1 &&
+          blockContent[0].type === 'text' && blockContent[0].text === '/';
+        const isEmpty = Array.isArray(blockContent) && blockContent.length === 0;
+        if (isSlashOnly || isEmpty) {
+          editor.updateBlock(currentBlock, { type: 'heading', props: { level: 4, isToggleable: true } });
+        } else {
+          editor.insertBlocks([{ type: 'heading', props: { level: 4, isToggleable: true } }], currentBlock, 'after');
+        }
+        const nextBlock = editor.getTextCursorPosition().nextBlock;
+        if (nextBlock) editor.setTextCursorPosition(nextBlock, 'end');
+      },
+    },
+    {
+      title: '子页面',
+      subtext: '创建并链接到子页面',
+      aliases: ['subpage', 'page', '子页面', '页面'],
+      group: '高级区块',
+      icon: <svg viewBox="4.12 2.37 11.75 15.25" style={{ width: '18px', height: '18px', fill: 'currentColor', overflow: 'visible' }}><path d="M13.3 14.25a.55.55 0 0 1-.55.55h-5.5a.55.55 0 1 1 0-1.1h5.5a.55.55 0 0 1 .55.55m-.55-1.95a.55.55 0 1 0 0-1.1h-5.5a.55.55 0 0 0 0 1.1z" /><path d="M6.25 2.375A2.125 2.125 0 0 0 4.125 4.5v11c0 1.174.951 2.125 2.125 2.125h7.5a2.125 2.125 0 0 0 2.125-2.125V8.121c0-.563-.224-1.104-.622-1.502L11.63 2.997a2.13 2.13 0 0 0-1.502-.622zM5.375 4.5c0-.483.392-.875.875-.875h3.7V6.25A2.05 2.05 0 0 0 12 8.3h2.625v7.2a.875.875 0 0 1-.875.875h-7.5a.875.875 0 0 1-.875-.875zm8.691 2.7H12a.95.95 0 0 1-.95-.95V4.184z" /></svg>,
+      onItemClick: () => {
+        const currentBlock = editor.getTextCursorPosition().block;
+        if (currentBlock.content === undefined) return;
+        const blockContent = currentBlock.content;
+        const isSlashOnly = Array.isArray(blockContent) && blockContent.length === 1 &&
+          blockContent[0].type === 'text' && blockContent[0].text === '/';
+        const isEmpty = Array.isArray(blockContent) && blockContent.length === 0;
+        if (isSlashOnly || isEmpty) {
+          editor.updateBlock(currentBlock, { type: 'subpage', props: { pageId: '' } });
+        } else {
+          editor.insertBlocks([{ type: 'subpage', props: { pageId: '' } }], currentBlock, 'after');
+        }
+        // Move cursor to next editable block
+        const nextBlock = editor.getTextCursorPosition().nextBlock;
+        if (nextBlock) editor.setTextCursorPosition(nextBlock, 'end');
+      },
+    },
+  ];
+}
 
 interface PageEditorProps {
   initialContent: string;
@@ -712,11 +787,19 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
             editable={!readOnly}
             onChange={handleChange}
             theme="light"
-            slashMenu={true}
+            slashMenu={false}
             sideMenu={true}
             formattingToolbar={true}
             linkToolbar={true}
-          />
+          >
+            {/* Custom slash menu with subpage support */}
+            {!readOnly && (
+              <SuggestionMenuController
+                triggerCharacter="/"
+                getItems={async (query: string) => filterSuggestionItems(getCustomSlashMenuItems(editor), query)}
+              />
+            )}
+          </BlockNoteViewRaw>
         </div>
       </ComponentsContext.Provider>
       {/* Clickable area below editor — click to append new paragraph */}

@@ -544,7 +544,7 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   width: 20px !important;
   height: 20px !important;
   flex-shrink: 0 !important;
-  color: #9b9a97 !important;
+  color: #37352f !important;
 }
 
 .bn-suggestion-menu .bn-suggestion-menu-item-icon svg {
