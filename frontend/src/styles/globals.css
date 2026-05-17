@@ -822,6 +822,19 @@ body.multi-drag-active .bn-drag-preview {
   overflow: hidden !important;
 }
 
+/* Block-to-sidebar drag drop indicator — fixed-position overlay via portal */
+.block-drop-indicator-on,
+.block-drop-indicator-line {
+  pointer-events: none;
+}
+
+/* 当 block 拖拽到侧边栏时，隐藏编辑器中的 BlockNote drop indicator，
+   避免同时显示两处放置提示 */
+.sidebar-block-drag-active .prosemirror-dropcursor-block,
+.sidebar-block-drag-active .prosemirror-dropcursor-inline {
+  display: none !important;
+}
+
 /* ============================================
    Table Styles - Notion-like
    ============================================ */

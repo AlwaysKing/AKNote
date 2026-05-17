@@ -20,6 +20,7 @@ import { usePageStore } from '../../stores/pageStore';
 import { Page } from '../../api/pages';
 import { useUndoStore } from '../../stores/undoStore';
 import { showToastWithAction } from '../Toast';
+import BlockDropOverlay from './BlockDropOverlay';
 
 // Collect all descendant IDs of a page (to prevent circular moves)
 function collectDescendantIds(page: Page): string[] {
@@ -214,6 +215,8 @@ export default function PageTree() {
   const pointerYRef = useRef(0);
   // rAF loop handle
   const rafRef = useRef<number>(0);
+  // Tree container ref for block drop overlay
+  const treeContainerRef = useRef<HTMLDivElement>(null);
 
   // When drag is active: track pointer Y + run rAF loop to continuously update drop position
   // (onDragOver only fires when over ELEMENT changes; we need updates on every pointer move)
@@ -441,7 +444,7 @@ export default function PageTree() {
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={pageTree.map(p => p.id)} strategy={verticalListSortingStrategy}>
-        <div data-page-tree="true" className="space-y-[2px]">
+        <div ref={treeContainerRef} data-page-tree="true" className="space-y-[2px] relative">
           {pageTree.map((page) => (
             <SortablePageTreeItem
               key={page.id}
@@ -454,6 +457,7 @@ export default function PageTree() {
               dragActiveId={activeId}
             />
           ))}
+          <BlockDropOverlay containerRef={treeContainerRef} />
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={null}>

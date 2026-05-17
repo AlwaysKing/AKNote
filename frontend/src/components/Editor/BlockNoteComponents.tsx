@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom';
 import { useBlockNoteEditor } from '@blocknote/react';
 import { showToast } from '../Toast';
 import { removeBlocksEnhanced } from './blockHelpers';
+import { setBlockDragData, isDragHandled, clearBlockDragData, getBlockDragData } from './blockDragState';
 
 // ==================== Menu Context ====================
 interface MenuContextValue {
@@ -197,7 +198,7 @@ const SideMenuButton: React.FC<{
       }, 100);
     };
 
-    // Native dragstart: capture multi-block data
+    // Native dragstart: capture multi-block data & share for sidebar drops
     const handleNativeDragStart = (e: Event) => {
       multiDragRef.current = null;
 
@@ -219,8 +220,44 @@ const SideMenuButton: React.FC<{
       }
       if (!blockId) return;
 
+      // ★ Always save block data for sidebar drop detection (single & multi block)
+      const currentBlock = editor.document.find((b: any) => b.id === blockId);
       const selectedIds = getSelectedBlockIds();
-      if (!selectedIds.includes(blockId) || selectedIds.length <= 1) return;
+      const isMultiBlock = selectedIds.includes(blockId) && selectedIds.length > 1;
+
+      if (currentBlock) {
+        if (isMultiBlock) {
+          // Multi-block: save ALL selected blocks
+          const allBlocks: Array<{ id: string; type: string; props: any; content: any; children: any }> = [];
+          for (const id of selectedIds) {
+            const b = editor.document.find((bb: any) => bb.id === id);
+            if (b) allBlocks.push({ id, type: b.type, props: { ...(b.props as any) }, content: b.content, children: b.children });
+          }
+          setBlockDragData({
+            blocks: allBlocks.map(({ type, props, content, children }) => ({ type, props, content, children })),
+            blockIds: allBlocks.map(b => b.id),
+          });
+        } else {
+          // Single block
+          setBlockDragData({
+            blocks: [{
+              type: currentBlock.type,
+              props: { ...(currentBlock.props as any) },
+              content: currentBlock.content,
+              children: currentBlock.children,
+            }],
+            blockIds: [blockId],
+          });
+        }
+
+        const dragEvt = e as DragEvent;
+        if (dragEvt.dataTransfer) {
+          dragEvt.dataTransfer.effectAllowed = 'move';
+          dragEvt.dataTransfer.setData('application/x-blocknote-block', blockId);
+        }
+      }
+
+      if (!isMultiBlock) return;
 
       const allBlocks = editor.document;
       const primaryIndex = allBlocks.findIndex(b => b.id === blockId);
@@ -316,10 +353,12 @@ const SideMenuButton: React.FC<{
       document.body.classList.add('multi-drag-active');
     };
 
-    // Native dragend: move other blocks to join the primary
+    // Native dragend: move other blocks to join the primary, or handle sidebar drop
     const handleNativeDragEnd = () => {
       // Remove body class that hides native drag preview
       document.body.classList.remove('multi-drag-active');
+      // Also clean up sidebar drag class (in case drag ends outside sidebar)
+      document.body.classList.remove('sidebar-block-drag-active');
 
       // Clean up floating ghost
       if (multiDragGhostRef.current) {
@@ -328,6 +367,30 @@ const SideMenuButton: React.FC<{
         ghost.remove();
         multiDragGhostRef.current = null;
       }
+
+      // ★ Check if sidebar handled the drop → remove blocks from editor
+      if (isDragHandled()) {
+        const handledData = getBlockDragData();
+        clearBlockDragData();
+        if (multiDragRef.current) {
+          const { primaryId, otherIds } = multiDragRef.current;
+          try { editor.removeBlocks([primaryId, ...otherIds] as any); } catch {}
+          multiDragRef.current = null;
+        } else if (handledData?.blockIds?.length) {
+          try { editor.removeBlocks(handledData.blockIds as any); } catch {}
+        }
+        // Clean up multi-drag visual feedback
+        document.querySelectorAll('[data-multi-drag]').forEach(el => {
+          delete (el as HTMLElement).dataset.multiDrag;
+        });
+        setBlockSelection(null);
+        return;
+      }
+
+      // ★ Always clear block drag data — prevents stale state from confusing
+      // BlockDropOverlay on subsequent drags (single-block editor-internal drags
+      // skip the multiDragRef path and would not reach this cleanup otherwise).
+      clearBlockDragData();
 
       if (!multiDragRef.current) return;
 
