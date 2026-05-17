@@ -609,7 +609,6 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
 
 /* ===== Custom Drag Handle Menu (Notion-style) ===== */
 .drag-handle-menu {
-  min-width: 220px;
   padding: 4px 0;
 }
 
@@ -681,8 +680,8 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   margin-left: 2px;
   background: #ffffff;
   border: 1px solid rgba(55, 53, 47, 0.09);
-  border-radius: 8px;
-  box-shadow: rgba(15, 15, 15, 0.05) 0px 0px 0px 1px, rgba(15, 15, 15, 0.1) 0px 3px 6px;
+  border-radius: 10px;
+  box-shadow: rgba(25, 25, 25, 0.05) 0px 20px 24px 0px, rgba(25, 25, 25, 0.027) 0px 5px 8px 0px, rgba(42, 28, 0, 0.07) 0px 0px 0px 1px;
   padding: 4px 0;
   min-width: 200px;
   z-index: 10001;
@@ -721,7 +720,7 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: rgba(55, 53, 47, 0.65);
+  color: inherit;
 }
 
 .drag-handle-submenu-item-label {
@@ -729,7 +728,6 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
 }
 
 .drag-handle-check {
-  color: rgba(55, 53, 47, 0.4);
   font-size: 13px;
   margin-left: auto;
 }
@@ -741,56 +739,57 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   text-align: center;
 }
 
-/* Color grid */
-.color-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
-  padding: 4px 4px 0;
-}
-
-.color-swatch {
-  width: 32px;
-  height: 32px;
+/* Color list (Notion-style vertical list) */
+.color-list-item {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  padding: 1px 8px;
+  margin: 0 4px;
   border-radius: 4px;
+  font-size: 14px;
+  color: #2c2c2b;
   cursor: pointer;
-  position: relative;
-  transition: background 0.1s;
+  white-space: nowrap;
+  height: 28px;
+  box-sizing: border-box;
 }
 
-.color-swatch:hover {
-  background: #ebebea;
+.color-list-item:hover {
+  background: rgba(55, 53, 47, 0.08);
 }
 
-.color-swatch.active {
-  background: rgba(35, 131, 226, 0.08);
+.color-list-item.selected {
+  /* No background — only ✓ checkmark indicates selection */
 }
 
-.color-swatch-letter {
+/* Rounded square swatch — Notion exact: 26×26, radius 6px, font 16px/500 */
+.color-list-swatch {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.color-swatch-bg-default {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
-  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 16px;
   font-weight: 500;
   color: #2c2c2b;
-  border: 1px solid #e9e9e7;
+  background: transparent;
+}
+
+.color-list-swatch-default {
+  background: transparent;
+}
+
+.color-list-label {
+  flex: 1;
+}
+
+.color-list-divider {
+  height: 1px;
+  background: rgba(55, 53, 47, 0.09);
+  margin: 4px 8px;
 }
 
 /* ============================================

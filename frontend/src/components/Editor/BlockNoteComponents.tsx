@@ -11,6 +11,7 @@ import React, {
   useCallback,
   useRef,
   useEffect,
+  useLayoutEffect,
   useMemo,
   ComponentType,
   ReactNode,
@@ -467,7 +468,7 @@ const GenericMenuDropdown: React.FC<{ className?: string; children?: ReactNode; 
     if (!dragHandle) return null;
 
     const handleRect = dragHandle.getBoundingClientRect();
-    const menuWidth = 200; // drag handle menu width
+    const menuWidth = 220; // drag handle menu width (matches CSS min-width)
     const gap = 4;
 
     // Left space from viewport left edge to drag handle left edge (includes sidebar)
@@ -498,6 +499,7 @@ const GenericMenuDropdown: React.FC<{ className?: string; children?: ReactNode; 
       position: 'fixed' as const,
       left: `${left}px`,
       top: `${top}px`,
+      width: `${menuWidth}px`,
       zIndex: 10000,
     };
   }, [isOpen, sub]);
@@ -1096,17 +1098,28 @@ const TableHandleExtendButton: React.FC<{
 
 // ==================== Drag Handle Menu ====================
 
-// Preset color definitions (matching BlockNote defaultColors)
-const COLORS: Record<string, { text: string; background: string }> = {
-  gray:    { text: '#9b9a97', background: '#ebeced' },
-  brown:   { text: '#64473a', background: '#e9e5e3' },
-  red:     { text: '#e03e3e', background: '#fbe4e4' },
-  orange:  { text: '#d9730d', background: '#f6e9d9' },
-  yellow:  { text: '#dfab01', background: '#fbf3db' },
-  green:   { text: '#4d6461', background: '#ddedea' },
-  blue:    { text: '#0b6e99', background: '#ddebf1' },
-  purple:  { text: '#6940a5', background: '#eae4f2' },
-  pink:    { text: '#ad1a72', background: '#f4dfeb' },
+// Preset color definitions — Notion exact measured colors
+const COLORS: Record<string, {
+  text: string;
+  background: string;
+  textBorder: string;
+  bgBorder: string;
+}> = {
+  gray:    { text: '#7d7a75', background: '#f0efed', textBorder: 'rgba(28,19,1,0.11)',  bgBorder: 'rgba(28,19,1,0.11)' },
+  brown:   { text: '#9f765a', background: '#f5ede9', textBorder: 'rgba(127,51,0,0.157)', bgBorder: 'rgba(127,51,0,0.157)' },
+  red:     { text: '#cf5148', background: '#fce9e7', textBorder: 'rgba(206,24,0,0.165)', bgBorder: 'rgba(206,24,0,0.165)' },
+  orange:  { text: '#d27b2d', background: '#fbebde', textBorder: 'rgba(196,88,0,0.204)', bgBorder: 'rgba(196,88,0,0.204)' },
+  yellow:  { text: '#cb9434', background: '#f9f3dc', textBorder: 'rgba(209,156,0,0.282)', bgBorder: 'rgba(209,156,0,0.282)' },
+  green:   { text: '#50946e', background: '#e8f1ec', textBorder: 'rgba(0,96,38,0.157)',  bgBorder: 'rgba(0,96,38,0.157)' },
+  blue:    { text: '#387dc9', background: '#e5f2fc', textBorder: 'rgba(0,118,217,0.204)', bgBorder: 'rgba(0,118,217,0.204)' },
+  purple:  { text: '#9a6bb4', background: '#f3ebf9', textBorder: 'rgba(92,0,163,0.14)',  bgBorder: 'rgba(92,0,163,0.14)' },
+  pink:    { text: '#c14c8a', background: '#fae9f1', textBorder: 'rgba(183,0,78,0.153)', bgBorder: 'rgba(183,0,78,0.153)' },
+};
+
+// Chinese color names for display
+const COLOR_NAMES: Record<string, string> = {
+  gray: '灰色', brown: '棕色', red: '红色', orange: '橙色',
+  yellow: '黄色', green: '绿色', blue: '蓝色', purple: '紫色', pink: '粉色',
 };
 
 // Block types available for "Turn into" conversion
@@ -1208,6 +1221,52 @@ function getDragHandleBlockId(): string | null {
   return null;
 }
 
+// Submenu boundary detection — flips left/right and clamps top/bottom
+function SubmenuContainer({ className, children }: { className?: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    // Reset inline styles so we can re-measure from CSS defaults
+    el.style.left = '';
+    el.style.right = '';
+    el.style.marginLeft = '';
+    el.style.marginRight = '';
+    el.style.top = '';
+
+    // Force reflow to get accurate rect after reset
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    el.offsetHeight;
+
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 8;
+
+    // Right overflow → flip to left side of parent
+    if (rect.right > vw - gap) {
+      el.style.left = 'auto';
+      el.style.right = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '2px';
+    }
+
+    // Bottom overflow → shift up
+    if (rect.bottom > vh - gap) {
+      const overflow = rect.bottom - vh + gap;
+      el.style.top = `${-4 - overflow}px`;
+    }
+  });
+
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
+  );
+}
+
 // Turn Into Submenu
 function TurnIntoSubmenu({ onClose }: { onClose: () => void }) {
   const editor = useBlockNoteEditor();
@@ -1219,9 +1278,9 @@ function TurnIntoSubmenu({ onClose }: { onClose: () => void }) {
 
   if (!isConvertible) {
     return (
-      <div className="drag-handle-submenu">
+      <SubmenuContainer className="drag-handle-submenu">
         <div className="drag-handle-submenu-empty">当前块不支持转换</div>
-      </div>
+      </SubmenuContainer>
     );
   }
 
@@ -1248,7 +1307,7 @@ function TurnIntoSubmenu({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="drag-handle-submenu">
+    <SubmenuContainer className="drag-handle-submenu">
       <div className="drag-handle-submenu-title">转换成</div>
       {TURN_INTO_OPTIONS.map((option, i) => (
         <div
@@ -1265,11 +1324,11 @@ function TurnIntoSubmenu({ onClose }: { onClose: () => void }) {
           {isCurrentType(option) && <span className="drag-handle-check">✓</span>}
         </div>
       ))}
-    </div>
+    </SubmenuContainer>
   );
 }
 
-// Color Submenu
+// Color Submenu — Notion-style vertical list
 function ColorSubmenu({ onClose }: { onClose: () => void }) {
   const editor = useBlockNoteEditor();
   const blockId = getDragHandleBlockId();
@@ -1282,7 +1341,7 @@ function ColorSubmenu({ onClose }: { onClose: () => void }) {
     if (!blockId) return;
     editor.updateBlock(blockId as any, {
       type: currentBlock?.type as any,
-      props: { textColor: color === 'default' ? 'default' : color } as any,
+      props: { textColor: color } as any,
     });
     onClose();
   };
@@ -1291,58 +1350,58 @@ function ColorSubmenu({ onClose }: { onClose: () => void }) {
     if (!blockId) return;
     editor.updateBlock(blockId as any, {
       type: currentBlock?.type as any,
-      props: { backgroundColor: color === 'default' ? 'default' : color } as any,
+      props: { backgroundColor: color } as any,
     });
     onClose();
   };
 
+  const defaultBorder = 'rgba(28,19,1,0.11)';
+
   return (
-    <div className="drag-handle-submenu color-submenu">
-      <div className="drag-handle-submenu-title">文本颜色</div>
-      <div className="color-grid">
-        <div
-          className={`color-swatch ${currentTextColor === 'default' ? 'active' : ''}`}
-          onClick={() => handleTextColor('default')}
-          title="默认"
-        >
-          <span className="color-swatch-letter" style={{ color: '#2c2c2b' }}>A</span>
-          {currentTextColor === 'default' && <span className="drag-handle-check">✓</span>}
-        </div>
-        {Object.entries(COLORS).map(([name, color]) => (
-          <div
-            key={name}
-            className={`color-swatch ${currentTextColor === name ? 'active' : ''}`}
-            onClick={() => handleTextColor(name)}
-            title={name}
-          >
-            <span className="color-swatch-letter" style={{ color: color.text }}>A</span>
-            {currentTextColor === name && <span className="drag-handle-check">✓</span>}
-          </div>
-        ))}
+    <SubmenuContainer className="drag-handle-submenu color-submenu">
+      {/* Text colors */}
+      <div
+        className={`color-list-item ${currentTextColor === 'default' ? 'selected' : ''}`}
+        onClick={() => handleTextColor('default')}
+      >
+        <span className="color-list-swatch" style={{ color: '#2c2c2b', boxShadow: `inset 0 0 0 1px ${defaultBorder}` }}>A</span>
+        <span className="color-list-label">默认文本</span>
+        {currentTextColor === 'default' && <span className="drag-handle-check">✓</span>}
       </div>
-      <div className="drag-handle-submenu-title" style={{ marginTop: 8 }}>背景颜色</div>
-      <div className="color-grid">
+      {Object.entries(COLORS).map(([name, color]) => (
         <div
-          className={`color-swatch ${currentBgColor === 'default' ? 'active' : ''}`}
-          onClick={() => handleBgColor('default')}
-          title="默认"
+          key={`text-${name}`}
+          className={`color-list-item ${currentTextColor === name ? 'selected' : ''}`}
+          onClick={() => handleTextColor(name)}
         >
-          <span className="color-swatch-bg-default">A</span>
-          {currentBgColor === 'default' && <span className="drag-handle-check">✓</span>}
+          <span className="color-list-swatch" style={{ color: color.text, boxShadow: `inset 0 0 0 1px ${color.textBorder}` }}>A</span>
+          <span className="color-list-label">{COLOR_NAMES[name]}文本</span>
+          {currentTextColor === name && <span className="drag-handle-check">✓</span>}
         </div>
-        {Object.entries(COLORS).map(([name, color]) => (
-          <div
-            key={name}
-            className={`color-swatch ${currentBgColor === name ? 'active' : ''}`}
-            onClick={() => handleBgColor(name)}
-            title={name}
-          >
-            <span className="color-swatch-letter" style={{ color: '#2c2c2b', background: color.background }}>A</span>
-            {currentBgColor === name && <span className="drag-handle-check">✓</span>}
-          </div>
-        ))}
+      ))}
+      {/* Divider */}
+      <div className="color-list-divider" />
+      {/* Background colors — no "A" letter, just colored square */}
+      <div
+        className={`color-list-item ${currentBgColor === 'default' ? 'selected' : ''}`}
+        onClick={() => handleBgColor('default')}
+      >
+        <span className="color-list-swatch color-list-swatch-default" style={{ boxShadow: `inset 0 0 0 1px ${defaultBorder}` }} />
+        <span className="color-list-label">默认背景</span>
+        {currentBgColor === 'default' && <span className="drag-handle-check">✓</span>}
       </div>
-    </div>
+      {Object.entries(COLORS).map(([name, color]) => (
+        <div
+          key={`bg-${name}`}
+          className={`color-list-item ${currentBgColor === name ? 'selected' : ''}`}
+          onClick={() => handleBgColor(name)}
+        >
+          <span className="color-list-swatch" style={{ background: color.background, boxShadow: `inset 0 0 0 1px ${color.bgBorder}` }} />
+          <span className="color-list-label">{COLOR_NAMES[name]}背景</span>
+          {currentBgColor === name && <span className="drag-handle-check">✓</span>}
+        </div>
+      ))}
+    </SubmenuContainer>
   );
 }
 
