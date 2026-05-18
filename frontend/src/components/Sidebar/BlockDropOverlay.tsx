@@ -384,36 +384,90 @@ function DropIndicator({ target }: { target: DropTarget }) {
 
 // ─── Drop Logic ──────────────────────────────────────────
 
+/**
+ * Subpage block 拖到侧边栏 → 调用 move API 执行真正的页面移动。
+ * 逻辑与 PageTree.tsx 的 handleDragEnd 一致：
+ *   'on'     → 成为 target 的子页面
+ *   'after'  → 移到 target 同级后面
+ *   'before' → 移到 target 同级前面
+ */
+async function moveSubpagesToSidebar(
+  slug: string,
+  target: DropTarget,
+  blocks: BlockDragBlock[],
+  pageTree: Page[],
+) {
+  let toParentId: string | null;
+  let toAfterId: string | null;
+
+  if (target.position === 'on') {
+    toParentId = target.pageId;
+    toAfterId = null;
+  } else {
+    toParentId = findParentId(pageTree, target.pageId);
+    if (target.position === 'after') {
+      toAfterId = target.pageId;
+    } else {
+      // 'before': 找到 target 前面的兄弟
+      const found = findPageInTree(pageTree, target.pageId);
+      if (found && found.index > 0) {
+        toAfterId = found.parentChildren[found.index - 1].id;
+      } else {
+        toAfterId = null;
+      }
+    }
+  }
+
+  for (const block of blocks) {
+    const pageId = block.props.pageId as string;
+    if (!pageId) continue;
+
+    try {
+      await pagesApi.move(slug, pageId, toParentId, toAfterId);
+      // 下一个 subpage 接在这个后面
+      toAfterId = pageId;
+    } catch (err) {
+      console.error('[BlockDropOverlay] Failed to move subpage:', err);
+    }
+  }
+}
+
 async function handleBlockDrop(target: DropTarget, dragData: BlockDragData) {
-  const { currentSpace } = useSpaceStore.getState();
+  const { currentSpace, pageTree } = useSpaceStore.getState();
   if (!currentSpace) return;
 
   const slug = currentSpace.slug;
 
-  if (target.position === 'on') {
-    // ① 放到页面上 → 追加 block 内容到页面末尾
-    const currentPageId = window.location.pathname.match(/\/p\/([^/]+)$/)?.[1];
-    if (currentPageId && target.pageId === currentPageId) {
-      // 同页面 drop：暂不处理，避免 sync 冲突（block 保持原位）
-      return;
+  // ① 分离 subpage block 和内容 block
+  const subpageBlocks = dragData.blocks.filter(
+    (b) => b.type === 'subpage' && b.props?.pageId,
+  );
+  const contentBlocks = dragData.blocks.filter((b) => b.type !== 'subpage');
+
+  // ② Subpage blocks → 使用 move API（真正的页面移动）
+  if (subpageBlocks.length > 0 && pageTree) {
+    await moveSubpagesToSidebar(slug, target, subpageBlocks, pageTree);
+  }
+
+  // ③ Content blocks → 插入 markdown 内容到目标页面（原有逻辑）
+  if (contentBlocks.length > 0) {
+    if (target.position === 'on') {
+      const currentPageId = window.location.pathname.match(/\/p\/([^/]+)$/)?.[1];
+      if (currentPageId && target.pageId === currentPageId) {
+        // 同页面 drop：跳过
+      } else {
+        await appendBlockToPage(slug, target.pageId, contentBlocks);
+      }
+    } else {
+      if (!pageTree) return;
+      const parentId = findParentId(pageTree, target.pageId);
+      const currentPageId = window.location.pathname.match(/\/p\/([^/]+)$/)?.[1];
+      if (currentPageId && parentId === currentPageId) {
+        // 同文档：跳过
+      } else {
+        await insertBlockIntoParent(slug, target, parentId, contentBlocks);
+      }
     }
-    await appendBlockToPage(slug, target.pageId, dragData.blocks);
-  } else {
-    // ② 'before'/'after' → 将 block 插入到目标页面的父文档中，
-    //    在目标页面的 subpage 引用前/后插入内容。
-    //    X 解析已在 handleDragOver 中完成，target.pageId 已指向正确祖先。
-    const pageTree = useSpaceStore.getState().pageTree;
-    if (!pageTree) return;
-
-    const parentId = findParentId(pageTree, target.pageId);
-    const currentPageId = window.location.pathname.match(/\/p\/([^/]+)$/)?.[1];
-
-    // 如果父文档就是当前页面 → 同文档重排，跳过（block 保持原位）
-    if (currentPageId && parentId === currentPageId) {
-      return;
-    }
-
-    await insertBlockIntoParent(slug, target, parentId, dragData.blocks);
   }
 
   // 刷新页面树
