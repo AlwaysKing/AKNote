@@ -87,6 +87,11 @@ export const pagesApi = {
     await apiClient.delete(`/spaces/${spaceSlug}/pages/${pageId}`);
   },
 
+  restoreById: async (spaceSlug: string, pageId: string): Promise<Page> => {
+    const response = await apiClient.post<Page>(`/spaces/${spaceSlug}/pages/${pageId}/restore`);
+    return response.data;
+  },
+
   listTrash: async (spaceSlug: string): Promise<TrashedItem[]> => {
     const response = await apiClient.get<TrashedItem[]>(`/spaces/${spaceSlug}/trash`);
     return response.data;

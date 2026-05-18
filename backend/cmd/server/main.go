@@ -136,6 +136,7 @@ func main() {
 		r.Put("/api/spaces/{slug}/pages/{id}", pageHandler.Update)
 		r.Put("/api/spaces/{slug}/pages/{id}/meta", pageHandler.UpdateMeta)
 		r.Post("/api/spaces/{slug}/pages/{id}/duplicate", pageHandler.Duplicate)
+		r.Post("/api/spaces/{slug}/pages/{id}/restore", pageHandler.RestoreByPageID)
 		r.Put("/api/spaces/{slug}/pages/{id}/move", pageHandler.Move)
 		r.Delete("/api/spaces/{slug}/pages/{id}", pageHandler.Delete)
 

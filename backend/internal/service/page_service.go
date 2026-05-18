@@ -878,6 +878,57 @@ func (s *PageService) RestoreFromTrash(spaceSlug string, trashRelPath string, sp
 	return repo.Create(page)
 }
 
+// RestoreByPageID finds a trashed page by its frontmatter ID and restores it.
+// Used by undo to recover subpage pages that were deleted.
+func (s *PageService) RestoreByPageID(spaceSlug string, pageID string, spaceID int) (*model.Page, error) {
+	spaceDir, _ := s.resolveSpaceDir(spaceSlug)
+	if spaceDir == "" {
+		return nil, fmt.Errorf("space not found: %s", spaceSlug)
+	}
+
+	trashDir := filepath.Join(spaceDir, ".trash")
+	trashRelPath, err := s.findTrashPageByID(trashDir, spaceSlug, pageID)
+	if err != nil {
+		return nil, fmt.Errorf("trashed page not found for id %s: %w", pageID, err)
+	}
+
+	return s.RestoreFromTrash(spaceSlug, trashRelPath, spaceID)
+}
+
+// findTrashPageByID walks the .trash directory to find a .md file whose frontmatter ID matches.
+// Returns the relative path from docsDir (e.g. "my-space/.trash/sub/pageName.md").
+func (s *PageService) findTrashPageByID(trashDir string, spaceSlug string, pageID string) (string, error) {
+	entries, err := os.ReadDir(trashDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		childPath := filepath.Join(trashDir, entry.Name())
+		if entry.IsDir() {
+			// Recurse into subdirectory
+			rel, err := s.findTrashPageByID(childPath, spaceSlug, pageID)
+			if err == nil {
+				return rel, nil
+			}
+			continue
+		}
+		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".md") {
+			continue
+		}
+		raw, err := os.ReadFile(childPath)
+		if err != nil {
+			continue
+		}
+		fm, _, _ := frontmatter.Parse(raw)
+		if fm.ID == pageID {
+			// Return path relative to docsDir
+			rel := strings.TrimPrefix(childPath, s.docsDir+"/")
+			return rel, nil
+		}
+	}
+	return "", fmt.Errorf("not found")
+}
+
 func (s *PageService) PermanentDelete(spaceSlug string, trashRelPath string) error {
 	trashAbsPath := filepath.Join(s.docsDir, trashRelPath)
 	if err := os.Remove(trashAbsPath); err != nil && !os.IsNotExist(err) {

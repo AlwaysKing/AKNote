@@ -250,6 +250,37 @@ func (h *PageHandler) Duplicate(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(page)
 }
 
+// RestoreByPageID handles POST /api/spaces/{slug}/pages/{id}/restore
+// Restores a trashed page by its frontmatter ID (used by undo).
+func (h *PageHandler) RestoreByPageID(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	if !h.checkSpaceAccess(w, r, slug) {
+		return
+	}
+
+	pageID := chi.URLParam(r, "id")
+
+	space, err := h.spaceService.GetBySlug(slug)
+	if err != nil {
+		http.Error(w, "Space not found", http.StatusNotFound)
+		return
+	}
+
+	page, err := h.pageService.RestoreByPageID(slug, pageID, space.ID)
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not found") {
+			http.Error(w, errMsg, http.StatusNotFound)
+		} else {
+			http.Error(w, errMsg, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(page)
+}
+
 // Move handles PUT /api/spaces/{slug}/pages/{id}/move
 func (h *PageHandler) Move(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")

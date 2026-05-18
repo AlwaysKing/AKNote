@@ -9,7 +9,7 @@ import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenu
 import { removeBlocksEnhanced } from './blockHelpers';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
 import { TextSelection } from '@tiptap/pm/state';
-import { setClipboardData, getClipboardData } from './blockClipboardState';
+import { setClipboardData, getClipboardData, addPendingRestore, removePendingRestore } from './blockClipboardState';
 import { BookmarkBlockSpec } from './BookmarkBlock';
 import { SubpageBlockSpec } from './SubpageBlock';
 import LinkPasteMenu from './LinkPasteMenu';
@@ -469,6 +469,47 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       triggerMirror();
     }, 1000);
   }, [triggerMirror]);
+
+  // Undo/redo compensation for subpage blocks
+  // Detects when undo/redo adds/removes subpage blocks and compensates with backend API calls
+  useEffect(() => {
+    if (!editor || readOnly) return;
+    return editor.onChange((_editor, context) => {
+      const changes = context.getChanges();
+      const undoRedoChanges = changes.filter(
+        (c: any) =>
+          (c.source.type === 'undo' || c.source.type === 'redo' || c.source.type === 'undo-redo')
+          && c.block.type === 'subpage'
+          && (c.block.props as any)?.pageId
+      );
+      if (undoRedoChanges.length === 0) return;
+
+      const slug = useSpaceStore.getState().currentSpace?.slug;
+      if (!slug) return;
+
+      (async () => {
+        for (const change of undoRedoChanges) {
+          const pageId = (change.block.props as any).pageId;
+          try {
+            if (change.type === 'delete') {
+              // Undo pasted subpage: delete the backend page
+              await pagesApi.delete(slug, pageId);
+            } else if (change.type === 'insert') {
+              // Undo deleted subpage: restore from trash
+              addPendingRestore(pageId);
+              await pagesApi.restoreById(slug, pageId);
+              removePendingRestore(pageId);
+            }
+          } catch (err) {
+            removePendingRestore(pageId);
+            console.error('[UndoCompensate] failed:', err);
+          }
+        }
+        // Refresh sidebar after all backend operations complete
+        await useSpaceStore.getState().refreshAll();
+      })();
+    });
+  }, [editor, readOnly]);
 
   // Paste handler — capture phase to intercept before BlockNote/ProseMirror processes
   useEffect(() => {

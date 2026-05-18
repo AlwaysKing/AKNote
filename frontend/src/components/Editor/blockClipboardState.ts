@@ -23,3 +23,21 @@ export function clearClipboardData(): void {
   clipboardMarkdown = null;
   clipboardIsCut = false;
 }
+
+/**
+ * Track page IDs that are currently being restored from trash (undo of delete).
+ * SubpageBlock checks this to avoid making API calls that would 404.
+ */
+const pendingRestores = new Set<string>();
+
+export function addPendingRestore(pageId: string): void {
+  pendingRestores.add(pageId);
+}
+
+export function removePendingRestore(pageId: string): void {
+  pendingRestores.delete(pageId);
+}
+
+export function isPendingRestore(pageId: string): boolean {
+  return pendingRestores.has(pageId);
+}

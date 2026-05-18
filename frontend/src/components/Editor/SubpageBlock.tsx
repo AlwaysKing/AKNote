@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createReactBlockSpec } from '@blocknote/react';
 import { FileText } from 'lucide-react';
 import { useSpaceStore } from '../../stores/spaceStore';
+import { isPendingRestore } from './blockClipboardState';
 import { pagesApi, Page } from '../../api/pages';
 import { removeBlocksEnhanced } from './blockHelpers';
 
@@ -62,13 +63,30 @@ function SubpageComponent({ block, editor }: any) {
     const found = findPageInTree(pageTree, pageId);
     if (found) {
       setPage(found);
+      setNotFound(false);
       return;
     }
+    // If page is being restored (undo), skip API call — pageTree will update via refreshAll
+    if (isPendingRestore(pageId)) return;
     // Fallback: fetch from API
     if (currentSpace?.slug) {
-      pagesApi.get(currentSpace.slug, pageId)
-        .then(p => { setPage(p); setNotFound(false); })
-        .catch(() => setNotFound(true));
+      let cancelled = false;
+      const fetchPage = async (retries = 1) => {
+        try {
+          const p = await pagesApi.get(currentSpace.slug, pageId);
+          if (!cancelled) { setPage(p); setNotFound(false); }
+        } catch {
+          if (cancelled) return;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 500));
+            fetchPage(retries - 1);
+          } else {
+            setNotFound(true);
+          }
+        }
+      };
+      fetchPage();
+      return () => { cancelled = true; };
     }
   }, [pageId, pageTree, currentSpace?.slug]);
 
