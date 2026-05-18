@@ -1012,7 +1012,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
   // Browser/tab close: write final mirror
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (hasChangesRef.current && !readOnlyRef.current) {
         try {
           const currentBlocks = editor.document;
@@ -1022,6 +1022,9 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         } catch {
           // Best effort — IndexedDB write may not complete in all browsers
         }
+        // Trigger browser confirmation dialog
+        event.preventDefault();
+        event.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
