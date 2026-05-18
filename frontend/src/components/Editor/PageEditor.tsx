@@ -8,6 +8,7 @@ import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
 import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenuOpen } from './BlockNoteComponents';
 import { removeBlocksEnhanced } from './blockHelpers';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
+import { TextSelection } from '@tiptap/pm/state';
 import { BookmarkBlockSpec } from './BookmarkBlock';
 import { SubpageBlockSpec } from './SubpageBlock';
 import LinkPasteMenu from './LinkPasteMenu';
@@ -566,15 +567,72 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     // Keyboard: Escape toggles selection, Delete/Backspace removes selected blocks
     // Uses module-level getSelectedBlockIds() to avoid stale closure issues
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+A / Ctrl+A: two-step select all (block text → all blocks)
+      if (e.key === 'a' && (e.metaKey || e.ctrlKey) && !e.altKey) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        // If already in block selection mode → select all blocks
+        const ids = getSelectedBlockIds();
+        if (ids.length > 0) {
+          const allBlockIds = editor.document.map((b: any) => b.id as string);
+          updateSelection(allBlockIds);
+          return;
+        }
+
+        const currentBlock = editor.getTextCursorPosition().block;
+
+        // Check if current block has text content
+        const hasText = Array.isArray(currentBlock.content) && currentBlock.content.length > 0;
+
+        if (hasText) {
+          // Check if all text in current block is already selected
+          const pmView = (editor as any).prosemirrorView;
+          const pmState = pmView.state;
+          const { from, to } = pmState.selection;
+          const $from = pmState.doc.resolve(from);
+          const $to = pmState.doc.resolve(to);
+
+          // Find the block content range: the blockContainer node that wraps this block
+          // Walk up from $from to find the blockContainer
+          let blockDepth = $from.depth;
+          while (blockDepth > 0 && pmState.doc.resolve($from.before(blockDepth)).nodeAfter?.type.name !== 'blockContainer') {
+            blockDepth--;
+          }
+
+          // Check if selection already covers the entire block content
+          const blockStart = $from.start(blockDepth);
+          const blockEnd = $from.end(blockDepth);
+          const isBlockFullySelected = from <= blockStart && to >= blockEnd;
+
+          if (!isBlockFullySelected) {
+            // Select all text in current block using ProseMirror transaction
+            // (must use PM API so state stays in sync for the second Cmd+A)
+            const tr = pmState.tr.setSelection(TextSelection.create(pmState.doc, blockStart, blockEnd));
+            pmView.dispatch(tr);
+            return;
+          }
+        }
+
+        // Block has no text or text is fully selected → block-level select all
+        const allBlockIds = editor.document.map((b: any) => b.id as string);
+        updateSelection(allBlockIds);
+        // Exit editing mode — blur editor and clear text selection
+        const pmEl = container?.querySelector('.ProseMirror') as HTMLElement;
+        if (pmEl) pmEl.blur();
+        window.getSelection()?.removeAllRanges();
+        return;
+      }
+
       if (e.key !== 'Escape' && e.key !== 'Backspace' && e.key !== 'Delete') return;
 
-      // If a floating menu is open, let it handle Escape first
-      const hasOpenMenu = isDragMenuOpen();
+      // If a floating menu is open (drag menu or slash menu), let it handle Escape first
+      const hasOpenMenu = isDragMenuOpen() || !!document.getElementById('bn-suggestion-menu');
+      if (e.key === 'Escape' && hasOpenMenu) return;
 
       const ids = getSelectedBlockIds();
       if (ids.length > 0) {
         if (e.key === 'Escape') {
-          if (hasOpenMenu) return; // Let menu handle it
           e.preventDefault();
           e.stopImmediatePropagation();
           updateSelection([]);
