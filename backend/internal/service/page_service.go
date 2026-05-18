@@ -475,8 +475,8 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 		if err != nil {
 			return nil, err
 		}
-		// Append subpage block to parent
-		s.appendSubpageToParent(repo, *req.ParentID, created.ID)
+		// Insert subpage block to parent (nil = append to end)
+		s.insertSubpageInParent(repo, *req.ParentID, created.ID, nil)
 		return created, nil
 	}
 
@@ -599,6 +599,14 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.Upd
 		newRelPath := filepath.Join(parentRelDir, newTitle+".md")
 		if err := repo.UpdateFilePath(pageID, newRelPath); err != nil {
 			return nil, err
+		}
+		// 更新子文档的 file_path 前缀（子目录已重命名，数据库路径需同步）
+		oldRelPrefix := strings.TrimSuffix(page.FilePath, ".md")
+		newRelPrefix := strings.TrimSuffix(newRelPath, ".md")
+		if oldRelPrefix != newRelPrefix {
+			if err := repo.UpdateFilePathPrefix(oldRelPrefix, newRelPrefix); err != nil {
+				return nil, fmt.Errorf("failed to update child paths: %w", err)
+			}
 		}
 		absPath = newMD
 
@@ -903,12 +911,13 @@ func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID 
 	}
 	fm, body, _ := frontmatter.Parse(raw)
 
-	// Determine target directory
+	// Determine target directory: 默认放在原文档同目录下
 	var targetDir string // absolute path to directory where the new .md goes
 	var targetRelDir string
 	newTitle := origPage.Title + " 副本"
 
 	if targetParentID != nil {
+		// 指定了目标父文档，放在其子目录下
 		parentPage, err := repo.GetByID(*targetParentID)
 		if err != nil {
 			return nil, fmt.Errorf("target parent not found: %w", err)
@@ -920,9 +929,14 @@ func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID 
 		targetDir = filepath.Join(s.docsDir, childRelDir)
 		targetRelDir = childRelDir
 	} else {
-		spaceDir, _ := s.resolveSpaceDir(spaceSlug)
-		targetDir = spaceDir
-		targetRelDir = spaceSlug
+		// 未指定目标父文档：放在原文档所在的同一目录下
+		targetDir = filepath.Dir(absPath)
+		targetRelDir = filepath.Dir(origPage.FilePath)
+		if targetRelDir == "." {
+			spaceDir, _ := s.resolveSpaceDir(spaceSlug)
+			targetDir = spaceDir
+			targetRelDir = spaceSlug
+		}
 	}
 
 	// Ensure target directory exists
@@ -975,6 +989,7 @@ func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID 
 }
 
 // copyDirRecursive copies a directory tree from src to dst.
+// For .md files, it replaces the frontmatter ID with a new UUID to avoid conflicts.
 func copyDirRecursive(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -989,6 +1004,12 @@ func copyDirRecursive(src, dst string) error {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
+		}
+		// 为 .md 文件重新生成 UUID，避免与原文档冲突
+		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			fm, body, _ := frontmatter.Parse(data)
+			fm.ID = uuidutil.NewPageID()
+			data = frontmatter.Render(fm, body)
 		}
 		return os.WriteFile(targetPath, data, 0644)
 	})
@@ -1087,14 +1108,18 @@ func (s *PageService) Move(spaceSlug string, pageID string, targetParentID *stri
 			}
 		}
 
-	// Maintain subpage blocks: remove from old parent, add to new parent (skip if same dir)
-	if !isSameDir {
-		if oldParentID != nil {
-			s.removeSubpageFromParent(repo, *oldParentID, pageID)
+	// Maintain subpage blocks in parent content
+	if targetParentID != nil {
+		if !isSameDir {
+			// Cross-directory: remove from old parent first
+			if oldParentID != nil {
+				s.removeSubpageFromParent(repo, *oldParentID, pageID)
+			}
+		} else {
+			// Same-directory reorder: remove then re-insert at new position
+			s.removeSubpageFromParent(repo, *targetParentID, pageID)
 		}
-		if targetParentID != nil {
-			s.appendSubpageToParent(repo, *targetParentID, pageID)
-		}
+		s.insertSubpageInParent(repo, *targetParentID, pageID, afterID)
 	}
 
 	// Recalculate sort_order for siblings in the target directory
@@ -1151,6 +1176,7 @@ func (s *PageService) recalculateSortOrder(repo *repository.PageRepository, pare
 
 	repo.UpdateSortOrders(updates)
 }
+
 
 // ListStarred returns all starred pages for a space
 func (s *PageService) ListStarred(spaceSlug string) ([]*model.Page, error) {
@@ -1229,72 +1255,98 @@ func (s *PageService) getDirectChildIDs(repo *repository.PageRepository, filePat
 }
 
 // maintainSubpageBlocks ensures the markdown body has exactly one <sub-page data-id="UUID"></sub-page>
-// for each direct child page, removing stale ones and appending missing ones.
+// for each direct child page. It only removes stale subpage lines and appends missing ones.
+// It does NOT reorder existing subpage lines — their positions are preserved.
 // Reads both new tag format and legacy comment format; always writes new tag format.
 func (s *PageService) maintainSubpageBlocks(body string, repo *repository.PageRepository, filePath string) string {
-	childIDs, err := s.getDirectChildIDs(repo, filePath)
+	// Use GetSiblings for sorted child IDs (sort_order ASC)
+	pageName := strings.TrimSuffix(filepath.Base(filePath), ".md")
+	parentDir := filepath.Dir(filePath)
+	childDir := filepath.Join(parentDir, pageName)
+	siblings, err := repo.GetSiblings(childDir)
 	if err != nil {
 		return body
 	}
 
+	// Build child ID set
 	childIDSet := make(map[string]bool)
-	for _, id := range childIDs {
-		childIDSet[id] = true
+	for _, p := range siblings {
+		childIDSet[p.ID] = true
 	}
 
+	if len(childIDSet) == 0 {
+		// No children — remove all subpage lines
+		var lines []string
+		changed := false
+		for _, line := range strings.Split(body, "\n") {
+			if parseSubpageID(line) != "" {
+				changed = true
+			} else {
+				lines = append(lines, line)
+			}
+		}
+		if !changed {
+			return body
+		}
+		result := strings.Join(lines, "\n")
+		return strings.TrimRight(result, "\n")
+	}
+
+	// Scan body: collect existing subpage IDs, build cleaned lines
 	existingSubpageSet := make(map[string]bool)
-	var lines []string
+	var cleanedLines []string
 	changed := false
+
 	for _, line := range strings.Split(body, "\n") {
 		id := parseSubpageID(line)
 		if id != "" {
-			existingSubpageSet[id] = true
 			if childIDSet[id] {
-				// Re-write in new tag format (migrates legacy comments on the fly)
+				existingSubpageSet[id] = true
+				// Re-write in new tag format (migrates legacy comments)
 				newTag := formatSubpageTag(id)
 				if strings.TrimSpace(line) != newTag {
-					lines = append(lines, newTag)
+					cleanedLines = append(cleanedLines, newTag)
 					changed = true
 				} else {
-					lines = append(lines, line)
+					cleanedLines = append(cleanedLines, line)
 				}
 			} else {
-				// Stale subpage line, drop it
+				// Stale subpage line — drop
 				changed = true
 			}
 		} else {
-			lines = append(lines, line)
+			cleanedLines = append(cleanedLines, line)
 		}
 	}
 
-	// Find missing subpages (child exists but no line in body)
+	// Find missing subpages (exist in filesystem but not in content)
 	var missing []string
-	for _, id := range childIDs {
-		if !existingSubpageSet[id] {
-			missing = append(missing, id)
+	for _, p := range siblings {
+		if !existingSubpageSet[p.ID] {
+			missing = append(missing, p.ID)
 		}
 	}
 
+	// Nothing to change
 	if len(missing) == 0 && !changed {
-		result := strings.Join(lines, "\n")
-		result = strings.TrimRight(result, "\n")
-		if result == strings.TrimRight(body, "\n") {
-			return body
-		}
-		return result
+		return body
 	}
 
 	// Append missing subpages at the end
 	for _, id := range missing {
-		lines = append(lines, formatSubpageTag(id))
+		cleanedLines = append(cleanedLines, formatSubpageTag(id))
 	}
 
-	result := strings.Join(lines, "\n")
+	result := strings.Join(cleanedLines, "\n")
 	return strings.TrimRight(result, "\n")
 }
 
-// appendSubpageToParent adds <sub-page data-id="childID"></sub-page> to the end of parent page's content.
-func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, parentID string, childID string) {
+// insertSubpageInParent inserts a <sub-page data-id="childID"></sub-page> tag into the parent page's content.
+// Position is determined by afterID:
+//   - afterID == nil: insert before the first existing <sub-page> line
+//   - afterID != nil: insert after the <sub-page> line matching afterID
+//   - no existing <sub-page> lines: append to end
+func (s *PageService) insertSubpageInParent(repo *repository.PageRepository, parentID string, childID string, afterID *string) {
 	parent, err := repo.GetByID(parentID)
 	if err != nil {
 		return
@@ -1309,21 +1361,66 @@ func (s *PageService) appendSubpageToParent(repo *repository.PageRepository, par
 	fm, body, _ := frontmatter.Parse(raw)
 
 	// Check if subpage line already exists (match both tag and comment format)
-	for _, line := range strings.Split(body, "\n") {
+	lines := strings.Split(body, "\n")
+	for _, line := range lines {
 		id := parseSubpageID(line)
 		if id == childID {
 			return // Already exists
 		}
 	}
 
-	// Append in new tag format
 	target := formatSubpageTag(childID)
-	if body != "" && !strings.HasSuffix(body, "\n") {
-		body += "\n"
-	}
-	body += target
 
-	assembled := frontmatter.Render(fm, body)
+	// Scan for subpage lines to determine insertion position
+	type subpageEntry struct {
+		lineIdx int
+		id      string
+	}
+	var subpages []subpageEntry
+	for i, line := range lines {
+		id := parseSubpageID(line)
+		if id != "" {
+			subpages = append(subpages, subpageEntry{i, id})
+		}
+	}
+
+	// No existing subpage lines → append to end
+	if len(subpages) == 0 {
+		if body != "" && !strings.HasSuffix(body, "\n") {
+			body += "\n"
+		}
+		body += target
+		assembled := frontmatter.Render(fm, body)
+		os.WriteFile(filePath, assembled, 0644)
+		return
+	}
+
+	// Determine insert index
+	var insertIdx int
+	if afterID != nil {
+		// Find the afterID subpage line, insert after it
+		insertIdx = subpages[len(subpages)-1].lineIdx + 1 // default: after last subpage
+		for _, sp := range subpages {
+			if sp.id == *afterID {
+				insertIdx = sp.lineIdx + 1
+				break
+			}
+		}
+	} else {
+		// Insert before the first subpage line
+		insertIdx = subpages[0].lineIdx
+	}
+
+	// Insert the new line at insertIdx
+	result := make([]string, 0, len(lines)+1)
+	result = append(result, lines[:insertIdx]...)
+	result = append(result, target)
+	result = append(result, lines[insertIdx:]...)
+
+	newBody := strings.Join(result, "\n")
+	newBody = strings.TrimRight(newBody, "\n")
+
+	assembled := frontmatter.Render(fm, newBody)
 	os.WriteFile(filePath, assembled, 0644)
 }
 

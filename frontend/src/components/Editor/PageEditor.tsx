@@ -11,6 +11,8 @@ import { PageReferenceBlockSpec } from './PageReferenceBlock';
 import { BookmarkBlockSpec } from './BookmarkBlock';
 import { SubpageBlockSpec } from './SubpageBlock';
 import LinkPasteMenu from './LinkPasteMenu';
+import { getBlockDragData, markDragHandled } from './blockDragState';
+import { pagesApi } from '../../api/pages';
 import { createMirror } from '../../services/mirrorStore';
 import { flushSync } from '../../services/syncModule';
 
@@ -163,7 +165,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     trailingBlock: false,
   } as any);
 
-  // Sync subpage blocks with sidebar create/delete events
+  // Sync subpage blocks with sidebar create/delete/reorder events
   useEffect(() => {
     if (readOnly) return;
 
@@ -189,11 +191,171 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       }
     };
 
+    const handleSubpageReordered = (e: Event) => {
+      const { parentId, movedPageId, afterId } = (e as CustomEvent).detail;
+
+      // Find the moved page's subpage block in the editor
+      const movedBlock = editor.document.find(
+        (b: any) => b.type === 'subpage' && b.props?.pageId === movedPageId,
+      );
+      if (!movedBlock) return;
+
+      // Save block data for re-insertion (deep clone to avoid stale refs)
+      const blockData = JSON.parse(JSON.stringify(movedBlock));
+
+      // Find the reference block BEFORE removing the moved block
+      let referenceBlockId: string | null = null;
+      if (afterId) {
+        const refBlock = editor.document.find(
+          (b: any) => b.type === 'subpage' && b.props?.pageId === afterId,
+        );
+        if (refBlock) referenceBlockId = refBlock.id;
+      }
+
+      // Remove the moved block from its old position
+      editor.removeBlocks([movedBlock]);
+
+      // Insert at the correct new position
+      if (!afterId) {
+        // afterId=null means insert at the beginning: before the first subpage block
+        const firstSubpage = editor.document.find(
+          (b: any) => b.type === 'subpage' && b.props?.pageId,
+        );
+        if (firstSubpage) {
+          editor.insertBlocks([blockData], firstSubpage, 'before');
+        } else {
+          // No other subpage blocks exist, insert at end of document
+          const doc = editor.document;
+          const lastBlock = doc[doc.length - 1];
+          if (lastBlock) {
+            editor.insertBlocks([blockData], lastBlock, 'after');
+          }
+        }
+      } else {
+        // Insert after the reference block
+        const refBlock = editor.document.find((b: any) => b.id === referenceBlockId);
+        if (refBlock) {
+          editor.insertBlocks([blockData], refBlock, 'after');
+        }
+      }
+    };
+
     document.addEventListener('subpage-created', handleSubpageCreated);
     document.addEventListener('subpage-deleted', handleSubpageDeleted);
+    document.addEventListener('subpage-reordered', handleSubpageReordered);
     return () => {
       document.removeEventListener('subpage-created', handleSubpageCreated);
       document.removeEventListener('subpage-deleted', handleSubpageDeleted);
+      document.removeEventListener('subpage-reordered', handleSubpageReordered);
+    };
+  }, [editor, readOnly]);
+
+  // Subpage block drop target: allow dropping blocks onto subpage blocks to move content
+  useEffect(() => {
+    const container = editorRef.current;
+    if (!container || readOnly) return;
+
+    let lastHighlight: HTMLElement | null = null;
+
+    const clearHighlight = () => {
+      if (lastHighlight) {
+        lastHighlight.classList.remove('subpage-drop-target');
+        lastHighlight = null;
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      const dragData = getBlockDragData();
+      if (!dragData || dragData.blocks.length === 0) return;
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const subpageEl = (el as HTMLElement)?.closest('[data-content-type="subpage"]') as HTMLElement | null;
+
+      if (subpageEl && subpageEl.dataset.pageId) {
+        // Check: don't highlight if only subpage blocks are being dragged
+        const hasNonSubpage = dragData.blocks.some(b => b.type !== 'subpage');
+        if (!hasNonSubpage) { clearHighlight(); return; }
+
+        // Only intercept if cursor is in the CENTER zone of the subpage block (middle 50%)
+        // Edge zones (top/bottom 25%) are for BlockNote's before/after reorder
+        const rect = subpageEl.getBoundingClientRect();
+        const relY = (e.clientY - rect.top) / rect.height; // 0..1
+        const isInCenter = relY > 0.25 && relY < 0.75;
+
+        if (isInCenter) {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+          if (lastHighlight !== subpageEl) {
+            clearHighlight();
+            subpageEl.classList.add('subpage-drop-target');
+            lastHighlight = subpageEl;
+          }
+        } else {
+          clearHighlight();
+        }
+      } else {
+        clearHighlight();
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      clearHighlight();
+
+      const dragData = getBlockDragData();
+      if (!dragData || dragData.blocks.length === 0) return;
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const subpageEl = (el as HTMLElement)?.closest('[data-content-type="subpage"]') as HTMLElement | null;
+      if (!subpageEl) return; // Normal drop — let BlockNote handle
+
+      const targetPageId = subpageEl.dataset.pageId;
+      if (!targetPageId) return;
+
+      // Only intercept if cursor is in the CENTER zone (same logic as dragover)
+      const rect = subpageEl.getBoundingClientRect();
+      const relY = (e.clientY - rect.top) / rect.height;
+      const isInCenter = relY > 0.25 && relY < 0.75;
+      if (!isInCenter) return; // Edge drop — let BlockNote handle reorder
+
+      // Filter: only move non-subpage blocks
+      const movableBlocks = dragData.blocks.filter(b => b.type !== 'subpage');
+      if (movableBlocks.length === 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Sync: save data + mark handled before any async (same race pattern as sidebar drop)
+      markDragHandled();
+
+      try {
+        const { spaceSlug } = identityRef.current;
+        const markdown = blocksToMarkdown(movableBlocks as any);
+        const targetPage = await pagesApi.get(spaceSlug, targetPageId);
+        const existing = targetPage.content || '';
+        const newContent = existing
+          ? existing.trimEnd() + '\n\n' + markdown
+          : markdown;
+        await pagesApi.update(spaceSlug, targetPageId, newContent);
+      } catch (err) {
+        console.error('[PageEditor] Failed to move blocks into subpage:', err);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!container.contains(e.relatedTarget as Node)) {
+        clearHighlight();
+      }
+    };
+
+    container.addEventListener('dragover', handleDragOver, true);
+    container.addEventListener('drop', handleDrop, true);
+    container.addEventListener('dragleave', handleDragLeave);
+    return () => {
+      container.removeEventListener('dragover', handleDragOver, true);
+      container.removeEventListener('drop', handleDrop, true);
+      container.removeEventListener('dragleave', handleDragLeave);
+      clearHighlight();
     };
   }, [editor, readOnly]);
 

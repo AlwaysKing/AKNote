@@ -415,7 +415,12 @@ export default function PageTree() {
       },
     ]);
 
-    refreshPageTree();
+    await refreshPageTree();
+
+    // Same-parent reorder: notify editor to update subpage block order (after pageTree is refreshed)
+    if (currentPageId && fromParentId === toParentId && toParentId === currentPageId) {
+      document.dispatchEvent(new CustomEvent('subpage-reordered', { detail: { parentId: currentPageId, movedPageId: movedId, afterId: toAfterId } }));
+    }
   }, [currentSpace, pageTree, overInfo, movePage, refreshPageTree, pushAction]);
 
   // Early returns AFTER all hooks

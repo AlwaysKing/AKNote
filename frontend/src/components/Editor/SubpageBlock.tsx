@@ -147,7 +147,7 @@ function SubpageComponent({ block, editor }: any) {
   };
 
   return (
-    <div className="w-full" ref={wrapperRef} data-stack-pos={stackPos || undefined}>
+    <div className="w-full" ref={wrapperRef} data-stack-pos={stackPos || undefined} data-page-id={pageId || undefined}>
       <div
         onClick={handleClick}
         className="flex items-center gap-1 py-0.5 rounded hover:bg-notion-hover cursor-pointer transition-colors w-full"

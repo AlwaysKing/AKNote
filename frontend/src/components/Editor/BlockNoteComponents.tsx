@@ -20,7 +20,7 @@ import { createPortal } from 'react-dom';
 import { useBlockNoteEditor } from '@blocknote/react';
 import { showToast } from '../Toast';
 import { removeBlocksEnhanced } from './blockHelpers';
-import { setBlockDragData, isDragHandled, clearBlockDragData, getBlockDragData } from './blockDragState';
+import { setBlockDragData, isDragHandled, clearBlockDragData, getBlockDragData, syncSubpageOrderToBackend } from './blockDragState';
 
 // ==================== Menu Context ====================
 interface MenuContextValue {
@@ -392,7 +392,11 @@ const SideMenuButton: React.FC<{
       // skip the multiDragRef path and would not reach this cleanup otherwise).
       clearBlockDragData();
 
-      if (!multiDragRef.current) return;
+      if (!multiDragRef.current) {
+        // Single block drag: BlockNote handled the repositioning, sync subpage order
+        syncSubpageOrderToBackend(editor);
+        return;
+      }
 
       const captured = multiDragRef.current;
       multiDragRef.current = null;
@@ -424,6 +428,9 @@ const SideMenuButton: React.FC<{
       }
 
       setBlockSelection(null);
+
+      // Sync subpage block order to backend if subpage blocks were reordered
+      syncSubpageOrderToBackend(editor);
 
       // Clean up multi-drag visual feedback
       document.querySelectorAll('[data-multi-drag]').forEach(el => {

@@ -835,6 +835,12 @@ body.multi-drag-active .bn-drag-preview {
   display: none !important;
 }
 
+/* 当 block 拖拽到 subpage block 上时的高亮效果 */
+[data-content-type="subpage"].subpage-drop-target {
+  background: rgba(35, 131, 226, 0.08);
+  border-radius: 4px;
+}
+
 /* ============================================
    Table Styles - Notion-like
    ============================================ */
