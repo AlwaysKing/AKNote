@@ -1119,7 +1119,22 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     const scrollArea = container.closest('.overflow-y-auto');
     if (!scrollArea) return;
 
+    // Track whether mousedown started on a contenteditable element (e.g. title h1).
+    // When the user drags to select text in the title and the mouse moves into
+    // the editor area, a click event fires on scrollArea (common ancestor).
+    // Without this guard, handleScrollAreaClick would steal focus to the editor.
+    let mouseDownOnContentEditable = false;
+    const trackMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      mouseDownOnContentEditable = !!target.closest('[contenteditable="true"]');
+    };
+    scrollArea.addEventListener('mousedown', trackMouseDown, true);
+
     const handleScrollAreaClick = (e: MouseEvent) => {
+      if (mouseDownOnContentEditable) {
+        mouseDownOnContentEditable = false;
+        return;
+      }
       const target = e.target as HTMLElement;
       if (target.closest('.bn-block-outer, button, a, input, [contenteditable="true"]')) return;
       if (target.closest('[data-floating-ui-focusable]')) return;
@@ -1176,7 +1191,10 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
 
     scrollArea.addEventListener('click', handleScrollAreaClick);
-    return () => scrollArea.removeEventListener('click', handleScrollAreaClick);
+    return () => {
+      scrollArea.removeEventListener('mousedown', trackMouseDown, true);
+      scrollArea.removeEventListener('click', handleScrollAreaClick);
+    };
   }, [readOnly, handleClickBelow, findBlockByY, isInputBlock, findNearestInputBlock, editor]);
 
   // Unmount: write final mirror if there are unsaved changes
