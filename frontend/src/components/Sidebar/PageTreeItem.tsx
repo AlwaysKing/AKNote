@@ -35,6 +35,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
   const location = useLocation();
   const { spaceSlug } = useParams<{ spaceSlug: string }>();
   const { createPage, deletePage, updateMetadata, refreshPageTree, duplicatePage, movePage } = usePageStore();
+  const refreshStarredAndRecent = useSpaceStore(s => s.refreshStarredAndRecent);
   const hasChildren = page.children && page.children.length > 0;
   const isActive = new RegExp(`/p/${page.id}$`).test(location.pathname);
   const isExpanded = expandedPageIds.has(page.id);
@@ -155,7 +156,7 @@ export default function PageTreeItem({ page, level, expandedPageIds, onToggleExp
         navigate(target, { replace: true });
       }
       await deletePage(spaceSlug, page.id);
-      await refreshPageTree();
+      await Promise.all([refreshPageTree(), refreshStarredAndRecent()]);
 
       // Notify editor if the deleted page's parent is currently viewed
       if (parentIsCurrent) {

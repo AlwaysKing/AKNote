@@ -16,6 +16,7 @@ interface SpaceState {
   refreshPageTree: () => Promise<void>;
   fetchStarred: (spaceSlug: string) => Promise<void>;
   fetchRecent: (spaceSlug: string) => Promise<void>;
+  refreshStarredAndRecent: () => Promise<void>;
   refreshAll: () => Promise<void>;
 }
 
@@ -84,6 +85,15 @@ export const useSpaceStore = create<SpaceState>((set, get) => ({
     }
   },
 
+  refreshStarredAndRecent: async () => {
+    const { currentSpace } = get();
+    if (currentSpace) {
+      await Promise.all([
+        get().fetchStarred(currentSpace.slug),
+        get().fetchRecent(currentSpace.slug),
+      ]);
+    }
+  },
   refreshAll: async () => {
     const { currentSpace } = get();
     if (currentSpace) {
