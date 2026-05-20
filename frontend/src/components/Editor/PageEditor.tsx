@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext, SuggestionMenuController, FormattingToolbar, FormattingToolbarController, BasicTextStyleButton, ColorStyleButton, CreateLinkButton, BlockTypeSelect } from '@blocknote/react';
+import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext, SuggestionMenuController, FormattingToolbar, FormattingToolbarController, BasicTextStyleButton, ColorStyleButton, CreateLinkButton, BlockTypeSelect, useBlockNoteEditor, useEditorState, useComponentsContext } from '@blocknote/react';
 import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems } from '@blocknote/core';
 import { getDefaultReactSlashMenuItems } from '@blocknote/react';
 import { zh } from '@blocknote/core/locales';
@@ -1482,6 +1482,38 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [editor]);
 
+  // Custom code button with </> icon
+  const CodeButton = useCallback(() => {
+    const editor = useBlockNoteEditor();
+    const Components = useComponentsContext()!;
+    const state = useEditorState({
+      editor,
+      selector: ({ editor: e }) => {
+        if (!e.isEditable) return undefined;
+        const blocks = e.getSelection()?.blocks || [e.getTextCursorPosition().block];
+        if (!blocks.find((b: any) => b.content !== undefined)) return undefined;
+        return 'code' in e.getActiveStyles() ? { active: true } : { active: false };
+      },
+    });
+    if (state === undefined) return null;
+    return (
+      <Components.FormattingToolbar.Button
+        className="bn-button"
+        onClick={() => { editor.focus(); editor.toggleStyles({ code: true }); }}
+        isSelected={state.active}
+        label="代码"
+        mainTooltip="代码"
+        icon={
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6" />
+            <line x1="14" y1="4" x2="10" y2="20" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+        }
+      />
+    );
+  }, []);
+
   // Stable reference for formatting toolbar content — prevents React from
   // unmounting/remounting on every editor state change (which would reset
   // the color picker's open/close state).
@@ -1493,9 +1525,10 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       <BasicTextStyleButton basicTextStyle="italic" key="italic" />
       <BasicTextStyleButton basicTextStyle="underline" key="underline" />
       <BasicTextStyleButton basicTextStyle="strike" key="strike" />
+      <CodeButton key="code" />
       <CreateLinkButton key="link" />
     </FormattingToolbar>
-  ), []);
+  ), [CodeButton]);
 
   return (
     <div className="relative" ref={editorRef}>
