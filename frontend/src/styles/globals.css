@@ -614,15 +614,15 @@ body.drag-menu-open .bn-side-menu .bn-button[draggable="true"] {
   box-shadow: inset 0 0 0 2.5px #2c2c2b !important;
 }
 /* Background colors: individual border colors */
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="gray"]   { box-shadow: inset 0 0 0 2.5px #7d7a75 !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="brown"]  { box-shadow: inset 0 0 0 2.5px #9f765a !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="red"]    { box-shadow: inset 0 0 0 2.5px #cf5148 !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="orange"] { box-shadow: inset 0 0 0 2.5px #d27b2d !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="yellow"] { box-shadow: inset 0 0 0 2.5px #cb9434 !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="green"]  { box-shadow: inset 0 0 0 2.5px #50946e !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="blue"]   { box-shadow: inset 0 0 0 2.5px #387dc9 !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="purple"] { box-shadow: inset 0 0 0 2.5px #9a6bb4 !important; }
-.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="pink"]   { box-shadow: inset 0 0 0 2.5px #c14c8a !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="gray"]   { box-shadow: inset 0 0 0 1.5px #7d7a75 !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="brown"]  { box-shadow: inset 0 0 0 1.5px #9f765a !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="red"]    { box-shadow: inset 0 0 0 1.5px #cf5148 !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="orange"] { box-shadow: inset 0 0 0 1.5px #d27b2d !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="yellow"] { box-shadow: inset 0 0 0 1.5px #cb9434 !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="green"]  { box-shadow: inset 0 0 0 1.5px #50946e !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="blue"]   { box-shadow: inset 0 0 0 1.5px #387dc9 !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="purple"] { box-shadow: inset 0 0 0 1.5px #9a6bb4 !important; }
+.bn-color-picker-dropdown [role="menuitem"]:has(.bn-menu-item-check:not(:empty)) .bn-color-icon[data-background-color="pink"]   { box-shadow: inset 0 0 0 1.5px #c14c8a !important; }
 /* Keep checkmark hidden but don't use display:none so :has(:not(:empty)) works */
 .bn-color-picker-dropdown .bn-menu-item-check {
   font-size: 0 !important;
