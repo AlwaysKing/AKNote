@@ -1605,8 +1605,37 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
     return currentBlock ? !NON_CONVERTIBLE_TYPES.has(currentBlock.type) : false;
   })();
 
+  const isBookmark = (() => {
+    const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+    return currentBlock?.type === 'bookmark';
+  })();
+
+  const handleConvertToMention = () => {
+    if (!blockId) return;
+    const block = editor.document.find(b => b.id === blockId);
+    if (!block || block.type !== 'bookmark') return;
+    const url = (block as any).props?.url || '';
+    if (!url) return;
+
+    const MENTION_PREFIX = '​​';
+    const mentionContent = [
+      { type: 'link', href: url, content: [{ type: 'text', text: MENTION_PREFIX + url, styles: {} }] }
+    ];
+    editor.updateBlock(block, { type: 'paragraph', content: mentionContent } as any);
+    onClose();
+  };
+
   return (
     <div className="drag-handle-menu">
+      {/* Convert bookmark to mention */}
+      {isBookmark && (
+        <div className="drag-handle-menu-item" onClick={handleConvertToMention}>
+          <span className="drag-handle-menu-item-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </span>
+          <span className="drag-handle-menu-item-label">转换为提及</span>
+        </div>
+      )}
       {/* Turn into */}
       {isConvertible && (
         <div
