@@ -1232,6 +1232,11 @@ body.multi-drag-active .bn-drag-preview {
   user-select: none !important;
 }
 
+/* Empty toggle — gray arrow (no children = no .bn-block-group) */
+.bn-block-outer:has(.bn-toggle-wrapper):not(:has(.bn-block-group)) .bn-toggle-button {
+  color: rgba(55, 53, 47, 0.3);
+}
+
 /* ============================================
    Internal Link Badge Styles
    ============================================ */
