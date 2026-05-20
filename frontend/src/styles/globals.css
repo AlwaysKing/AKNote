@@ -1185,31 +1185,42 @@ body.multi-drag-active .bn-drag-preview {
 }
 
 /* ============================================
-   Table Styles - Notion-like
+   Table Styles - Notion-like (measured from real Notion)
    ============================================ */
-.bn-editor [data-content-type="table"] {
-  border: 1px solid #e9e9e7 !important;
-  border-radius: 4px !important;
-  overflow: hidden !important;
-}
 
+/* Table — collapse borders, override BlockNote width:auto */
 .bn-editor [data-content-type="table"] table {
-  border-collapse: separate !important;
-  border-spacing: 0 !important;
-  width: 100% !important;
+  border-collapse: collapse !important;
+  width: auto !important;
 }
 
-.bn-editor [data-content-type="table"] td,
-.bn-editor [data-content-type="table"] th {
-  border: 1px solid #e9e9e7 !important;
-  padding: 6px 8px !important;
-  font-size: 14px !important;
-  color: #2c2c2b !important;
+/* All cells — Notion: border #e6e5e3, font 16px, line-height 24px */
+.bn-editor [data-content-type="table"] td {
+  border: 1px solid #e6e5e3 !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  line-height: 24px !important;
+  color: #2c2c2b;
+  min-height: 32px;
 }
 
-.bn-editor [data-content-type="table"] th {
-  background: #f7f6f3 !important;
-  font-weight: 500 !important;
+/* Cell text — Notion uses padding 7px 9px on inner div */
+.bn-editor [data-content-type="table"] td p {
+  margin: 0 !important;
+  padding: 7px 9px !important;
+  line-height: 24px !important;
+  font-size: 16px !important;
+}
+
+/* Row hover */
+.bn-editor [data-content-type="table"] tbody tr:hover td {
+  background: rgba(55, 53, 47, 0.024);
+}
+
+/* Selected cell — blue highlight */
+.bn-editor [data-content-type="table"] td.selected {
+  background: rgba(35, 131, 226, 0.04) !important;
+  box-shadow: inset 0 0 0 2px rgb(35, 131, 226);
 }
 
 /* ============================================
