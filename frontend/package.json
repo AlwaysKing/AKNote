@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "bash scripts/apply-patches.sh"
   },
   "dependencies": {
     "@blocknote/core": "^0.50.0",
