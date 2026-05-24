@@ -515,6 +515,13 @@ h4[contenteditable],
   /* Notion: 侧边菜单出现在 block 左侧，间隙约 14px */
   left: -14px !important;
 }
+
+/* Table block: drag handle sits a little farther left so the gap to the table
+   matches Notion's table-specific spacing instead of generic text blocks. */
+[data-floating-ui-focusable]:has(> .bn-side-menu[data-block-type="table"]) {
+  left: -20px !important;
+}
+
 body.side-menu-visible [data-floating-ui-focusable]:has(> .bn-side-menu) {
   opacity: 1 !important;
   pointer-events: auto !important;
@@ -542,6 +549,13 @@ body.side-menu-visible [data-floating-ui-focusable]:has(> .bn-side-menu) {
 
 .bn-side-menu[data-block-type="heading"][data-level="3"] {
   height: 30px !important; /* lineHeight 26 + padding 4 */
+}
+
+.bn-side-menu[data-block-type="table"] {
+  height: 35px !important;
+  position: relative !important;
+  left: 12px !important;
+  top: 11px !important;
 }
 
 /* SideMenu 按钮通用样式 — Notion: rgb(44,44,43), transparent bg, 4px radius */
@@ -1196,10 +1210,25 @@ body.multi-drag-active .bn-drag-preview {
    Table Styles - Notion-like (measured from real Notion)
    ============================================ */
 
+.bn-editor [data-content-type="table"] .tableWrapper {
+  padding-top: 8px !important;
+  padding-bottom: 24px !important;
+  padding-left: 6px !important;
+}
+
 /* Table — collapse borders, override BlockNote width:auto */
 .bn-editor [data-content-type="table"] table {
   border-collapse: collapse !important;
-  width: auto !important;
+  max-width: none !important;
+}
+
+.bn-editor [data-content-type="table"] .tableWrapper-inner {
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+.bn-editor [data-content-type="table"] .tableWrapper table[style*="width"] {
+  min-width: 100% !important;
 }
 
 /* All cells — Notion: border #e6e5e3, text 14px/20px */
@@ -1351,12 +1380,12 @@ body.multi-drag-active .bn-drag-preview {
    border-collapse tables give those rows 0 height, making merged cells appear too short.
    Fix: set minimum row height on ALL tr, and use ::before on truly empty rows. */
 .bn-editor [data-content-type="table"] tr {
-  height: 39px;
+  height: 35px;
 }
 .bn-editor [data-content-type="table"] tr:empty::before {
   content: '\00a0';
   display: table-cell;
-  height: 39px;
+  height: 35px;
   visibility: hidden;
   padding: 0;
   line-height: 0;

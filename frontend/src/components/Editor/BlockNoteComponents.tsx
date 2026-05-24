@@ -1323,6 +1323,16 @@ const ColorIcon: React.FC = () => (
   </svg>
 );
 
+const FitWidthIcon: React.FC = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3.5 5.5v9" />
+    <path d="M16.5 5.5v9" />
+    <path d="M7 10h6" />
+    <path d="M9 8l-2 2 2 2" />
+    <path d="M11 8l2 2-2 2" />
+  </svg>
+);
+
 // Notion "Copy link" icon (chain link)
 const LinkIcon: React.FC = () => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -1367,6 +1377,88 @@ function getDragHandleBlockId(): string | null {
     }
   }
   return null;
+}
+
+function getTableBlockElements(blockId: string): {
+  tableBlock: HTMLElement;
+  tableEl: HTMLTableElement;
+  cols: HTMLElement[];
+} | null {
+  const escapedId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(blockId)
+    : blockId.replace(/"/g, '\\"');
+  const blockRoot = document.querySelector(`[data-id="${escapedId}"]`) as HTMLElement | null;
+  if (!blockRoot) return null;
+
+  const tableBlock = (blockRoot.matches('[data-content-type="table"]')
+    ? blockRoot
+    : blockRoot.querySelector('[data-content-type="table"]')) as HTMLElement | null;
+  if (!tableBlock) return null;
+
+  const tableEl = tableBlock.querySelector('table') as HTMLTableElement | null;
+  if (!tableEl) return null;
+
+  const cols = Array.from(tableEl.querySelectorAll('colgroup col')) as HTMLElement[];
+  if (cols.length === 0) return null;
+
+  return { tableBlock, tableEl, cols };
+}
+
+function distributeWidthsToTarget(currentWidths: number[], targetWidth: number, minWidth = 48): number[] {
+  const widths = currentWidths.map((width) => Math.max(minWidth, Math.round(width)));
+  const colCount = widths.length;
+  if (colCount === 0) return widths;
+
+  const safeTargetWidth = Math.max(targetWidth, minWidth * colCount);
+  let delta = safeTargetWidth - widths.reduce((sum, width) => sum + width, 0);
+
+  if (delta > 0) {
+    const base = Math.floor(delta / colCount);
+    const remainder = delta % colCount;
+    return widths.map((width, index) => width + base + (index < remainder ? 1 : 0));
+  }
+
+  if (delta === 0) {
+    return widths;
+  }
+
+  let reduceNeeded = -delta;
+  const adjustable = new Set(widths.map((_, index) => index));
+
+  while (reduceNeeded > 0 && adjustable.size > 0) {
+    const indices = Array.from(adjustable);
+    const base = Math.floor(reduceNeeded / indices.length);
+    const remainder = reduceNeeded % indices.length;
+    let changed = false;
+
+    indices.forEach((index, order) => {
+      const desiredReduction = base + (order < remainder ? 1 : 0);
+      if (desiredReduction <= 0) return;
+
+      const allowedReduction = widths[index] - minWidth;
+      const appliedReduction = Math.min(allowedReduction, desiredReduction);
+      if (appliedReduction <= 0) {
+        adjustable.delete(index);
+        return;
+      }
+
+      widths[index] -= appliedReduction;
+      reduceNeeded -= appliedReduction;
+      changed = true;
+
+      if (widths[index] <= minWidth) {
+        adjustable.delete(index);
+      }
+    });
+
+    if (!changed) break;
+  }
+
+  if (reduceNeeded > 0) {
+    return Array(colCount).fill(minWidth);
+  }
+
+  return widths;
 }
 
 // Submenu boundary detection — flips left/right and clamps top/bottom
@@ -1636,8 +1728,10 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
     return currentBlock ? !NON_CONVERTIBLE_TYPES.has(currentBlock.type) : false;
   })();
 
+  const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+  const isTable = currentBlock?.type === 'table';
+
   const isBookmark = (() => {
-    const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
     return currentBlock?.type === 'bookmark';
   })();
 
@@ -1653,6 +1747,38 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
       { type: 'link', href: url, content: [{ type: 'text', text: MENTION_PREFIX + url, styles: {} }] }
     ];
     editor.updateBlock(block, { type: 'paragraph', content: mentionContent } as any);
+    onClose();
+  };
+
+  const handleFitTableWidth = () => {
+    if (!blockId || !currentBlock || currentBlock.type !== 'table') return;
+
+    const dom = getTableBlockElements(blockId);
+    if (!dom) {
+      showToast('未找到表格宽度信息');
+      return;
+    }
+
+    const { tableBlock, cols } = dom;
+    const availableWidth = Math.round(tableBlock.getBoundingClientRect().width);
+    if (availableWidth <= 0) {
+      showToast('表格可用宽度无效');
+      return;
+    }
+
+    const currentWidths = cols.map((col) => {
+      const width = Math.round(col.getBoundingClientRect().width || parseFloat(col.style.width) || 0);
+      return width > 0 ? width : Math.max(1, Math.round(availableWidth / cols.length));
+    });
+
+    const nextWidths = distributeWidthsToTarget(currentWidths, availableWidth);
+    editor.updateBlock(blockId as any, {
+      type: 'table',
+      content: {
+        ...(currentBlock.content as any),
+        columnWidths: nextWidths,
+      },
+    } as any);
     onClose();
   };
 
@@ -1684,20 +1810,26 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {/* Color */}
-      <div
-        className="drag-handle-menu-item has-submenu"
-        onMouseEnter={() => handleSubmenuEnter('color')}
-        onMouseLeave={handleSubmenuLeave}
-        onClick={() => setActiveSubmenu(activeSubmenu === 'color' ? null : 'color')}
-      >
-        <span className="drag-handle-menu-item-icon"><ColorIcon /></span>
-        <span className="drag-handle-menu-item-label">颜色</span>
-        <span className="drag-handle-menu-item-arrow"><ChevronRightIcon /></span>
-        {activeSubmenu === 'color' && (
-          <ColorSubmenu onClose={onClose} />
-        )}
-      </div>
+      {isTable ? (
+        <div className="drag-handle-menu-item" onClick={handleFitTableWidth}>
+          <span className="drag-handle-menu-item-icon"><FitWidthIcon /></span>
+          <span className="drag-handle-menu-item-label">适应宽度</span>
+        </div>
+      ) : (
+        <div
+          className="drag-handle-menu-item has-submenu"
+          onMouseEnter={() => handleSubmenuEnter('color')}
+          onMouseLeave={handleSubmenuLeave}
+          onClick={() => setActiveSubmenu(activeSubmenu === 'color' ? null : 'color')}
+        >
+          <span className="drag-handle-menu-item-icon"><ColorIcon /></span>
+          <span className="drag-handle-menu-item-label">颜色</span>
+          <span className="drag-handle-menu-item-arrow"><ChevronRightIcon /></span>
+          {activeSubmenu === 'color' && (
+            <ColorSubmenu onClose={onClose} />
+          )}
+        </div>
+      )}
 
       <div className="drag-handle-menu-divider" />
 

@@ -1194,11 +1194,6 @@ const TableHeaderIndicators = Extension.create({
               currentView = view;
               syncHeaderHandleLock(view);
               syncDragTracking(view);
-              // When the table action menu is open, skip re-rendering the
-              // header indicators. Re-rendering uses innerHTML which would
-              // destroy the current indicators (and their event listeners)
-              // and also wipe any inline styles set on td elements for
-              // visual selection feedback.
               if (isHeaderMenuOpen()) return;
               setTimeout(() => renderTableHeaderHandles(view), 0);
             },
