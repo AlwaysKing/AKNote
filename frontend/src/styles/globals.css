@@ -1202,13 +1202,13 @@ body.multi-drag-active .bn-drag-preview {
   width: auto !important;
 }
 
-/* All cells — Notion: border #e6e5e3, font 16px, line-height 24px */
+/* All cells — Notion: border #e6e5e3, text 14px/20px */
 .bn-editor [data-content-type="table"] td,
 .bn-editor [data-content-type="table"] th {
   border: 1px solid #e6e5e3 !important;
   padding: 0 !important;
-  font-size: 16px !important;
-  line-height: 24px !important;
+  font-size: 14px !important;
+  line-height: 20px !important;
   color: #2c2c2b;
   min-height: 32px;
   transition: border-color 0.15s ease;
@@ -1334,8 +1334,16 @@ body.multi-drag-active .bn-drag-preview {
 .bn-editor [data-content-type="table"] th p {
   margin: 0 !important;
   padding: 7px 9px !important;
-  line-height: 24px !important;
-  font-size: 16px !important;
+  line-height: 20px !important;
+  font-size: 14px !important;
+}
+
+.bn-editor [data-content-type="table"] td p {
+  font-weight: 400 !important;
+}
+
+.bn-editor [data-content-type="table"] th p {
+  font-weight: 500 !important;
 }
 
 /* ---- Rowspan cell height fix ---- */
