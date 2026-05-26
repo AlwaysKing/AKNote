@@ -1902,20 +1902,8 @@ th.visual-cell-selected::after {
   background: transparent !important;
 }
 
-.bn-editor [data-content-type="image"] .bn-visual-media-wrapper::after,
 .bn-image-shell.is-selected::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 2px;
-  background: rgba(35, 131, 226, 0.12);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 200ms ease;
-}
-
-.bn-image-shell.is-selected::after {
-  opacity: 1;
+  content: none !important;
 }
 
 .bn-editor [data-content-type="image"] img {
