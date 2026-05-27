@@ -2045,6 +2045,11 @@ th.visual-cell-selected::after {
   fill: currentColor;
 }
 
+/* Hide BlockNote's default caption - we use a custom <input> instead */
+.bn-editor [data-content-type="image"] .bn-file-caption {
+  display: none !important;
+}
+
 .bn-image-caption {
   width: 100%;
   max-width: 100%;

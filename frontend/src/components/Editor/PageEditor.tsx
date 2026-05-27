@@ -2174,6 +2174,10 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
             caption.placeholder = '写一个标题…';
             caption.draggable = false;
             wrapper.appendChild(caption);
+            // Prevent ProseMirror's capture-phase mousedown on editor from stealing focus
+            caption.addEventListener('mousedown', (event) => {
+              event.stopPropagation();
+            });
             caption.addEventListener('keydown', (event) => {
               event.stopPropagation();
               if (event.key === 'Enter') {
@@ -2238,18 +2242,17 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
     document.addEventListener('mousedown', handleDocumentMouseDown, true);
 
-    // Guard: intercept events targeting caption input at document level (capture phase),
-    // BEFORE ProseMirror's capture-phase handler on the editor element.
-    // ProseMirror uses capture-phase on the editor; document capture fires first.
+    // Guard: intercept beforeinput and composition events targeting caption input at document
+    // level (capture phase), BEFORE ProseMirror's capture-phase handler on the editor element.
+    // Do NOT intercept keydown/mousedown — the input needs those events (Enter to finish,
+    // click to focus). ProseMirror replaces the image block via beforeinput, not keydown.
     const captionEventGuard = (event: Event) => {
       const target = event.target as HTMLElement;
       if (target && target.closest?.('.bn-image-caption')) {
         event.stopPropagation();
       }
     };
-    document.addEventListener('keydown', captionEventGuard, true);
     document.addEventListener('beforeinput', captionEventGuard, true);
-    document.addEventListener('keyup', captionEventGuard, true);
     document.addEventListener('compositionstart', captionEventGuard, true);
     document.addEventListener('compositionupdate', captionEventGuard, true);
     document.addEventListener('compositionend', captionEventGuard, true);
@@ -2263,9 +2266,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       editorEl.removeEventListener('scroll', scheduleSync, true);
       window.removeEventListener('resize', scheduleSync);
       document.removeEventListener('mousedown', handleDocumentMouseDown, true);
-      document.removeEventListener('keydown', captionEventGuard, true);
       document.removeEventListener('beforeinput', captionEventGuard, true);
-      document.removeEventListener('keyup', captionEventGuard, true);
       document.removeEventListener('compositionstart', captionEventGuard, true);
       document.removeEventListener('compositionupdate', captionEventGuard, true);
       document.removeEventListener('compositionend', captionEventGuard, true);
