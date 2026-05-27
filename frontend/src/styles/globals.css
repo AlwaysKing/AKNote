@@ -1904,6 +1904,16 @@ th.visual-cell-selected::after {
 
 
 
+/* Hide selection overlay and ProseMirror outline when caption is focused or align menu is open */
+.bn-editor [data-content-type="image"]:has(.bn-image-caption:focus) .bn-file-block-content-wrapper::after,
+.bn-editor [data-content-type="image"]:has(.bn-image-align-menu) .bn-file-block-content-wrapper::after {
+  content: none !important;
+}
+.bn-editor [data-content-type="image"]:has(.bn-image-caption:focus) > *,
+.bn-editor [data-content-type="image"]:has(.bn-image-align-menu) > * {
+  outline: none !important;
+}
+
 .bn-editor [data-content-type="image"] img {
   display: block !important;
   border-radius: 0 !important;
@@ -2038,20 +2048,16 @@ th.visual-cell-selected::after {
 .bn-image-caption {
   width: 100%;
   max-width: 100%;
-  margin-top: 8px;
-  padding: 0 4px;
-  min-height: 20px;
+  margin-top: 4px;
+  padding: 6px 2px;
+  border: none;
   outline: none;
-  text-align: center;
-  font-size: 13px;
-  line-height: 20px;
-  color: rgba(55, 53, 47, 0.65);
-  white-space: break-spaces;
-}
-
-.bn-image-caption:empty::before {
-  content: attr(data-placeholder);
-  color: rgba(55, 53, 47, 0.32);
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(55, 53, 47, 0.5);
+  font-family: inherit;
 }
 
 .bn-editor [data-content-type="image"] .bn-resize-handle {

@@ -13,7 +13,7 @@ import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
 import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenuOpen, GROUP_ORDER, ColorListContent } from './BlockNoteComponents';
 import { removeBlocksEnhanced } from './blockHelpers';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
-import { TextSelection } from '@tiptap/pm/state';
+import { TextSelection, NodeSelection } from '@tiptap/pm/state';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { Extension } from '@tiptap/core';
@@ -2014,7 +2014,10 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         const imageEl = blockContent.querySelector('.bn-visual-media') as HTMLImageElement | null;
         if (!wrapper || !mediaWrapper || !imageEl) return;
 
-        const isSelected = blockContent.classList.contains('ProseMirror-selectednode') || selectedIds.has(blockId);
+        const captionFocused = !!wrapper.querySelector('.bn-image-caption:focus');
+        const captionOpen = wrapper.dataset.captionOpen === 'true';
+        const alignMenuOpen = wrapper.dataset.alignOpen === 'true';
+        const isSelected = !captionFocused && !captionOpen && !alignMenuOpen && (blockContent.classList.contains('ProseMirror-selectednode') || selectedIds.has(blockId));
         wrapper.classList.add('bn-image-shell');
         mediaWrapper.classList.add('bn-image-media-shell');
         imageEl.classList.add('bn-image-media');
@@ -2058,6 +2061,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           icon: string | null,
           className: string,
           onClick: () => void,
+          skipBlockSelection?: boolean,
         ) => {
           let button = toolbar!.querySelector(`.bn-image-toolbar-button[data-key="${key}"]`) as HTMLButtonElement | null;
           if (!button) {
@@ -2068,7 +2072,9 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
             button.className = `bn-image-toolbar-button ${className}`;
             button.dataset.key = key;
             button.onpointerdown = (event) => {
-              activateImageBlockSelection(blockId, wrapper);
+              if (!skipBlockSelection) {
+                activateImageBlockSelection(blockId, wrapper);
+              }
               event.preventDefault();
               event.stopPropagation();
               onClick();
@@ -2099,23 +2105,17 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           });
           wrapper.dataset.alignOpen = wrapper.dataset.alignOpen === 'true' ? 'false' : 'true';
           syncImageBlocks();
-        });
+        }, true); // skipBlockSelection - don't activate NodeSelection for align button
         ensureButton('caption', '', IMAGE_TOOLBAR_ICONS.caption, '', () => {
           wrapper.dataset.captionOpen = 'true';
           syncImageBlocks();
           requestAnimationFrame(() => {
-            const captionEl = blockContent.querySelector('.bn-image-caption') as HTMLDivElement | null;
+            const captionEl = wrapper.querySelector('.bn-image-caption') as HTMLInputElement | null;
             if (!captionEl) return;
             captionEl.focus();
-            const selection = window.getSelection();
-            if (!selection) return;
-            const range = document.createRange();
-            range.selectNodeContents(captionEl);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
+            captionEl.setSelectionRange(captionEl.value.length, captionEl.value.length);
           });
-        });
+        }, true); // skipBlockSelection - don't activate NodeSelection for caption button
         ensureButton('fullscreen', '', IMAGE_TOOLBAR_ICONS.fullscreen, '', () => openImageFullscreen(blockId));
         ensureButton('download', '', IMAGE_TOOLBAR_ICONS.download, '', () => downloadImageBlock(blockId));
         let alignMenu = wrapper.querySelector('.bn-image-align-menu') as HTMLElement | null;
@@ -2150,6 +2150,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
               event.stopPropagation();
               setImageAlignment(blockId, item.key);
               wrapper.dataset.alignOpen = 'false';
+              setBlockSelection(null);
               syncImageBlocks();
             };
             button.onmousedown = (event) => {
@@ -2162,37 +2163,49 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           alignMenu?.remove();
         }
 
-        let caption = blockContent.querySelector('.bn-image-caption') as HTMLDivElement | null;
+        let caption = wrapper.querySelector('.bn-image-caption') as HTMLInputElement | null;
         const captionValue = String(blockProps.caption || '');
         const shouldShowCaption = wrapper.dataset.captionOpen === 'true' || !!captionValue.trim();
         if (shouldShowCaption) {
           if (!caption) {
-            caption = document.createElement('div');
+            caption = document.createElement('input');
+            caption.type = 'text';
             caption.className = 'bn-image-caption';
-            caption.contentEditable = 'true';
-            caption.dataset.placeholder = '输入标题';
-            caption.spellcheck = true;
+            caption.placeholder = '写一个标题…';
             caption.draggable = false;
-            caption.addEventListener('mousedown', (event) => {
-              event.stopPropagation();
-            });
-            blockContent.appendChild(caption);
+            wrapper.appendChild(caption);
             caption.addEventListener('keydown', (event) => {
+              event.stopPropagation();
               if (event.key === 'Enter') {
                 event.preventDefault();
-                (event.currentTarget as HTMLDivElement).blur();
+                (event.currentTarget as HTMLInputElement).blur();
               }
             });
+            caption.addEventListener('focus', () => {
+              // Clear ProseMirror NodeSelection so it doesn't intercept typing
+              // Without this, ProseMirror still thinks the image block is "selected"
+              // and will replace it with text when user types
+              try {
+                const pmView = (editor as any).prosemirrorView;
+                if (pmView && pmView.state.selection instanceof NodeSelection) {
+                  const $end = pmView.state.doc.resolve(pmView.state.doc.content.size);
+                  pmView.dispatch(pmView.state.tr.setSelection(
+                    TextSelection.near($end)
+                  ));
+                }
+              } catch {}
+            });
             caption.addEventListener('blur', (event) => {
-              saveImageCaption(blockId, (event.currentTarget as HTMLDivElement).textContent || '');
-              if (!((event.currentTarget as HTMLDivElement).textContent || '').trim()) {
+              saveImageCaption(blockId, (event.currentTarget as HTMLInputElement).value || '');
+              if (!(event.currentTarget as HTMLInputElement).value.trim()) {
                 wrapper.dataset.captionOpen = 'false';
                 syncImageBlocks();
               }
             });
           }
-          if (caption.textContent !== captionValue) {
-            caption.textContent = captionValue;
+          const inputEl = caption as HTMLInputElement;
+          if (inputEl.value !== captionValue && document.activeElement !== inputEl) {
+            inputEl.value = captionValue;
           }
         } else {
           caption?.remove();
@@ -2224,6 +2237,23 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       });
     };
     document.addEventListener('mousedown', handleDocumentMouseDown, true);
+
+    // Guard: intercept events targeting caption input at document level (capture phase),
+    // BEFORE ProseMirror's capture-phase handler on the editor element.
+    // ProseMirror uses capture-phase on the editor; document capture fires first.
+    const captionEventGuard = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (target && target.closest?.('.bn-image-caption')) {
+        event.stopPropagation();
+      }
+    };
+    document.addEventListener('keydown', captionEventGuard, true);
+    document.addEventListener('beforeinput', captionEventGuard, true);
+    document.addEventListener('keyup', captionEventGuard, true);
+    document.addEventListener('compositionstart', captionEventGuard, true);
+    document.addEventListener('compositionupdate', captionEventGuard, true);
+    document.addEventListener('compositionend', captionEventGuard, true);
+
     scheduleSync();
     const delayedSyncA = window.setTimeout(syncImageBlocks, 200);
     const delayedSyncB = window.setTimeout(syncImageBlocks, 900);
@@ -2233,6 +2263,12 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       editorEl.removeEventListener('scroll', scheduleSync, true);
       window.removeEventListener('resize', scheduleSync);
       document.removeEventListener('mousedown', handleDocumentMouseDown, true);
+      document.removeEventListener('keydown', captionEventGuard, true);
+      document.removeEventListener('beforeinput', captionEventGuard, true);
+      document.removeEventListener('keyup', captionEventGuard, true);
+      document.removeEventListener('compositionstart', captionEventGuard, true);
+      document.removeEventListener('compositionupdate', captionEventGuard, true);
+      document.removeEventListener('compositionend', captionEventGuard, true);
       window.clearTimeout(delayedSyncA);
       window.clearTimeout(delayedSyncB);
     };
