@@ -2560,8 +2560,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const blockContent = targetEl.closest('.bn-block-content');
       if (!blockContent) return null;
 
-      // Must be a toggleable block
-      if (blockContent.getAttribute('data-is-toggleable') !== 'true') return null;
+      // Must be a toggleable block (has toggle wrapper and is expanded)
+      if (!blockContent.querySelector('.bn-toggle-wrapper')) return null;
 
       const blockOuter = blockContent.closest('.bn-block-outer');
       if (!blockOuter) return null;
@@ -3402,18 +3402,111 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const selRect = { left, top, right: left + width, bottom: top + height };
       const blockOuters = container.querySelectorAll('.bn-block-outer');
       const intersecting: string[] = [];
+      const blockOuterMap = new Map<string, Element>();
 
       blockOuters.forEach(outer => {
         const blockEl = outer.querySelector('[data-id]');
         if (!blockEl) return;
+        const id = blockEl.getAttribute('data-id')!;
+        blockOuterMap.set(id, outer);
         const r = outer.getBoundingClientRect();
         if (selRect.left < r.right && selRect.right > r.left &&
             selRect.top < r.bottom && selRect.bottom > r.top) {
-          intersecting.push(blockEl.getAttribute('data-id')!);
+          intersecting.push(id);
         }
       });
 
-      updateSelection(intersecting);
+      // --- Notion-style toggle selection logic ---
+      // Toggle = title + content (children). Toggle and its children are mutually exclusive in selection:
+      // - If only toggle family is in range → select content items, not toggle title
+      // - If toggle + same-level siblings are in range → select toggle as whole unit, not content items
+      // This applies recursively for nested toggles (process outermost first).
+
+      const isToggleBlock = (outer: Element): boolean => {
+        // Detect toggle by presence of .bn-toggle-wrapper AND .bn-block-group (has children)
+        // Note: .bn-block-group is inside .bn-toggle-wrapper, NOT a direct child of .bn-block-outer
+        const hasToggleWrapper = !!outer.querySelector('.bn-toggle-wrapper');
+        const hasBlockGroup = !!outer.querySelector('.bn-block-group');
+        return hasToggleWrapper && hasBlockGroup;
+      };
+
+      // Find all descendant block IDs of a toggle (any nesting depth)
+      const getDescendantIds = (toggleOuter: Element): string[] => {
+        const group = toggleOuter.querySelector('.bn-block-group');
+        if (!group) return [];
+        const ids: string[] = [];
+        group.querySelectorAll('.bn-block-outer').forEach(child => {
+          const id = child.querySelector('[data-id]')?.getAttribute('data-id');
+          if (id) ids.push(id);
+        });
+        return ids;
+      };
+
+      // Get the parent .bn-block-group element for a block-outer
+      const getParentGroup = (outer: Element): Element | null => {
+        return outer.parentElement?.classList.contains('bn-block-group') ? outer.parentElement : null;
+      };
+
+      // Sort toggles by nesting depth (outermost first) for correct recursive processing
+      // Deeper toggles have more ancestor .bn-block-outer elements
+      const getNestingDepth = (outer: Element): number => {
+        let depth = 0;
+        let el = outer.parentElement;
+        while (el) {
+          if (el.classList?.contains('bn-block-outer')) depth++;
+          el = el.parentElement;
+        }
+        return depth;
+      };
+
+      // Identify toggles that are in intersecting AND have at least one descendant in intersecting
+      const toggleInfoList: Array<{ id: string; outer: Element; descendantIds: string[]; depth: number }> = [];
+      for (const id of intersecting) {
+        const outer = blockOuterMap.get(id);
+        if (!outer || !isToggleBlock(outer)) continue;
+        const descIds = getDescendantIds(outer);
+        const selectedDescIds = descIds.filter(did => intersecting.includes(did));
+        if (selectedDescIds.length > 0) {
+          toggleInfoList.push({ id, outer, descendantIds: selectedDescIds, depth: getNestingDepth(outer) });
+        }
+      }
+
+      // Process outermost toggles first (lower depth = more outer)
+      toggleInfoList.sort((a, b) => a.depth - b.depth);
+
+      const result = [...intersecting];
+      for (const { id: toggleId, outer: toggleOuter, descendantIds } of toggleInfoList) {
+        // Skip if toggle already removed from result (by a parent's Case B)
+        if (!result.includes(toggleId)) continue;
+
+        // Check: are there same-level (same parent block-group) siblings also selected?
+        const parentGroup = getParentGroup(toggleOuter);
+        let hasSelectedSibling = false;
+        if (parentGroup) {
+          for (const rid of result) {
+            if (rid === toggleId || descendantIds.includes(rid)) continue;
+            const rOuter = blockOuterMap.get(rid);
+            if (rOuter && getParentGroup(rOuter) === parentGroup) {
+              hasSelectedSibling = true;
+              break;
+            }
+          }
+        }
+
+        if (hasSelectedSibling) {
+          // Case B: toggle + siblings → keep toggle, remove ALL descendants from selection
+          for (const did of descendantIds) {
+            const idx = result.indexOf(did);
+            if (idx >= 0) result.splice(idx, 1);
+          }
+        } else {
+          // Case A: only toggle family → remove toggle title, keep descendants
+          const idx = result.indexOf(toggleId);
+          if (idx >= 0) result.splice(idx, 1);
+        }
+      }
+
+      updateSelection(result);
     };
 
     // Mouseup: clean up drag
