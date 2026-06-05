@@ -10,7 +10,7 @@ import { getDefaultReactSlashMenuItems } from '@blocknote/react';
 import { zh } from '@blocknote/core/locales';
 import '@blocknote/react/style.css';
 import { markdownToBlocks, blocksToMarkdown } from '../../utils/markdown';
-import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenuOpen, GROUP_ORDER, ColorListContent } from './BlockNoteComponents';
+import { blockNoteComponents, setBlockSelection, getSelectedBlockIds, isDragMenuOpen, GROUP_ORDER, ColorListContent, findBlockDeep } from './BlockNoteComponents';
 import { removeBlocksEnhanced } from './blockHelpers';
 import { PageReferenceBlockSpec } from './PageReferenceBlock';
 import { TextSelection, NodeSelection } from '@tiptap/pm/state';
@@ -1857,7 +1857,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
   }, [editorEl, fileUploadStates]);
 
   const getBlockById = useCallback((blockId: string) => {
-    return editor.document.find((block: any) => block.id === blockId) || null;
+    return findBlockDeep(editor.document, blockId) || null;
   }, [editor]);
 
   const uploadImageReplacement = useCallback(async (blockId: string, file: File) => {
@@ -2335,7 +2335,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           const blockContainer = blockContent.closest('[data-id]');
           const blockId = blockContainer?.getAttribute('data-id');
           if (!blockId) return;
-          const block = editor.document.find((b: any) => b.id === blockId);
+          const block = findBlockDeep(editor.document, blockId!);
           if (!block) return;
           const url = (block.props as any)?.url;
           if (url) {
@@ -2875,9 +2875,9 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
       const leftChild = target.side === 'left'
         ? makeColumnChild(draggedBlock)
-        : makeColumnChild(editor.document.find((b: any) => b.id === target.blockId));
+        : makeColumnChild(findBlockDeep(editor.document, target.blockId));
       const rightChild = target.side === 'left'
-        ? makeColumnChild(editor.document.find((b: any) => b.id === target.blockId))
+        ? makeColumnChild(findBlockDeep(editor.document, target.blockId))
         : makeColumnChild(draggedBlock);
 
       try {
@@ -2889,9 +2889,9 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         }], target.blockId, 'before');
 
         // Remove the original blocks
-        editor.removeBlocks([editor.document.find((b: any) => b.id === target.blockId)!]);
+        editor.removeBlocks([findBlockDeep(editor.document, target.blockId)!]);
         if (draggedBlockId !== target.blockId) {
-          const draggedBlockInDoc = editor.document.find((b: any) => b.id === draggedBlockId);
+          const draggedBlockInDoc = findBlockDeep(editor.document, draggedBlockId);
           if (draggedBlockInDoc) editor.removeBlocks([draggedBlockInDoc]);
         }
 
@@ -2951,7 +2951,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       let placement: 'before' | 'after' = 'after';
 
       if (targetBlockId) {
-        referenceBlock = editor.document.find((block: any) => block.id === targetBlockId) || null;
+        referenceBlock = findBlockDeep(editor.document, targetBlockId) || null;
         if (referenceBlock && targetBlockEl) {
           const rect = targetBlockEl.getBoundingClientRect();
           placement = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';

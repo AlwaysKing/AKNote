@@ -1,5 +1,6 @@
 import { useSpaceStore } from '../../stores/spaceStore';
 import { pagesApi } from '../../api/pages';
+import { findBlockDeep } from './BlockNoteComponents';
 
 /**
  * Enhanced removeBlocks: when any of the removed blocks is a subpage block,
@@ -14,7 +15,7 @@ export async function removeBlocksEnhanced(editor: any, blocks: any[] | string[]
   // Find subpage blocks among those being removed
   const subpagePageIds: string[] = [];
   for (const id of blockIds) {
-    const block = editor.document.find((b: any) => b.id === id);
+    const block = findBlockDeep(editor.document, id);
     if (block?.type === 'subpage' && block.props?.pageId) {
       subpagePageIds.push(block.props.pageId);
     }

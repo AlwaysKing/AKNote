@@ -113,6 +113,11 @@ h4[contenteditable],
   padding: 6px 6px 6px 8px !important;
 }
 
+/* Block 背景色圆角 */
+.bn-editor .bn-block:has(> .bn-block-content[data-background-color]:not([data-background-color="default"])) {
+  border-radius: 4px;
+}
+
 /* Block 内层文本: Notion 系统字体的实际行框比 lineHeight 高，需 2px 上下 padding 补偿 */
 .bn-editor .bn-block-content {
   padding: 2px 0 !important;

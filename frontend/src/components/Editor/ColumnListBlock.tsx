@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createReactBlockSpec } from '@blocknote/react';
 import { Plus } from 'lucide-react';
+import { findBlockDeep } from './BlockNoteComponents';
 
 // ─── Column Block ──────────────────────────────────────────────
 
@@ -332,7 +333,7 @@ function ColumnListComponent({ block, editor }: any) {
     const newCount = columnCount - 1;
     const equalRatio = Math.round(100 / newCount);
     setTimeout(() => {
-      const updatedBlock = editor.document.find((b: any) => b.id === block.id);
+      const updatedBlock = findBlockDeep(editor.document, block.id);
       if (updatedBlock) {
         (updatedBlock.children || []).forEach((child: any) => {
           editor.updateBlock(child.id, {

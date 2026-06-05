@@ -247,7 +247,7 @@ const SideMenuButton: React.FC<{
       if (!blockId) return;
 
       // ★ Always save block data for sidebar drop detection (single & multi block)
-      const currentBlock = editor.document.find((b: any) => b.id === blockId);
+      const currentBlock = findBlockDeep(editor.document, blockId);
       const selectedIds = getSelectedBlockIds();
       const isMultiBlock = selectedIds.includes(blockId) && selectedIds.length > 1;
 
@@ -256,7 +256,7 @@ const SideMenuButton: React.FC<{
           // Multi-block: save ALL selected blocks
           const allBlocks: Array<{ id: string; type: string; props: any; content: any; children: any }> = [];
           for (const id of selectedIds) {
-            const b = editor.document.find((bb: any) => bb.id === id);
+            const b = findBlockDeep(editor.document, id);
             if (b) allBlocks.push({ id, type: b.type, props: { ...(b.props as any) }, content: b.content, children: b.children });
           }
           setBlockDragData({
@@ -1434,6 +1434,19 @@ const TrashIcon: React.FC = () => (
 );
 
 // Helper: get the currently hovered block ID from the side menu
+// Recursively find a block by ID, including nested children (e.g. blocks inside columns).
+// editor.document only contains top-level blocks; column children are nested deeper.
+export function findBlockDeep(document: any[], blockId: string): any {
+  for (const block of document) {
+    if (block.id === blockId) return block;
+    if (block.children?.length) {
+      const found = findBlockDeep(block.children, blockId);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 function getDragHandleBlockId(): string | null {
   const allHandles = document.querySelectorAll('[aria-label="打开菜单"]');
   for (const h of allHandles) {
@@ -1643,7 +1656,7 @@ function SubmenuContainer({ className, children }: { className?: string; childre
 function TurnIntoSubmenu({ onClose }: { onClose: () => void }) {
   const editor = useBlockNoteEditor();
   const blockId = getDragHandleBlockId();
-  const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+  const currentBlock = blockId ? findBlockDeep(editor.document, blockId) : null;
 
   // Determine if current block type is convertible
   const isConvertible = currentBlock ? !NON_CONVERTIBLE_TYPES.has(currentBlock.type) : false;
@@ -1771,7 +1784,7 @@ export function ColorListContent({
 function ColorSubmenu({ onClose }: { onClose: () => void }) {
   const editor = useBlockNoteEditor();
   const blockId = getDragHandleBlockId();
-  const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+  const currentBlock = blockId ? findBlockDeep(editor.document, blockId) : null;
 
   const currentTextColor = (currentBlock?.props as any)?.textColor || 'default';
   const currentBgColor = (currentBlock?.props as any)?.backgroundColor || 'default';
@@ -1837,7 +1850,7 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
 
   const handleDuplicate = () => {
     if (!blockId) return;
-    const block = editor.document.find(b => b.id === blockId);
+    const block = findBlockDeep(editor.document, blockId);
     if (!block) return;
     const blockData = {
       type: block.type,
@@ -1856,11 +1869,11 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
   };
 
   const isConvertible = (() => {
-    const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+    const currentBlock = blockId ? findBlockDeep(editor.document, blockId) : null;
     return currentBlock ? !NON_CONVERTIBLE_TYPES.has(currentBlock.type) : false;
   })();
 
-  const currentBlock = blockId ? editor.document.find(b => b.id === blockId) : null;
+  const currentBlock = blockId ? findBlockDeep(editor.document, blockId) : null;
   const isTable = currentBlock?.type === 'table';
 
   const isBookmark = (() => {
@@ -1869,7 +1882,7 @@ function DragHandleMenuContent({ onClose }: { onClose: () => void }) {
 
   const handleConvertToMention = () => {
     if (!blockId) return;
-    const block = editor.document.find(b => b.id === blockId);
+    const block = findBlockDeep(editor.document, blockId);
     if (!block || block.type !== 'bookmark') return;
     const url = (block as any).props?.url || '';
     if (!url) return;

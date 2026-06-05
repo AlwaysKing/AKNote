@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Paintbrush, Eraser } from 'lucide-react';
-import { COLORS, COLOR_NAMES } from './BlockNoteComponents';
+import { COLORS, COLOR_NAMES, findBlockDeep } from './BlockNoteComponents';
 
 interface ColInfo {
   tableId: string;
@@ -173,7 +173,7 @@ export default function TableColumnActions({
     const editor = getEditor();
     if (!editor) return;
 
-    const block = editor.document.find((b: any) => b.id === tableId);
+    const block = findBlockDeep(editor.document, tableId);
     if (!block?.content?.rows) return;
 
     const newRows = block.content.rows.map((row: any) => ({
@@ -197,7 +197,7 @@ export default function TableColumnActions({
     const editor = getEditor();
     if (!editor) return;
 
-    const block = editor.document.find((b: any) => b.id === tableId);
+    const block = findBlockDeep(editor.document, tableId);
     if (!block?.content?.rows) return;
 
     const newRows = block.content.rows.map((row: any) => ({
