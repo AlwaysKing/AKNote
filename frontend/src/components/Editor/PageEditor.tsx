@@ -2753,13 +2753,19 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
     const clearColumnHighlight = () => {
       if (columnLineEl) columnLineEl.style.display = 'none';
-      // Restore ProseMirror dropcursor
-      container.querySelectorAll('.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline')
-        .forEach(el => { (el as HTMLElement).style.display = ''; });
     };
 
     const removeColumnLine = () => {
       if (columnLineEl) { columnLineEl.remove(); columnLineEl = null; }
+    };
+
+    /** Remove BlockNote's DropCursor elements (blue #ddeeff horizontal bars) */
+    const removeBNDropCursors = () => {
+      container.querySelectorAll(
+        '.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline, ' +
+        '.prosemirror-dropcursor-block-horizontal, .prosemirror-dropcursor-block-vertical-left, ' +
+        '.prosemirror-dropcursor-block-vertical-right, .prosemirror-dropcursor-vertical'
+      ).forEach(el => el.remove());
     };
 
     interface ColumnDropTarget {
@@ -2868,9 +2874,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       e.stopPropagation();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
 
-      // Hide ProseMirror's dropcursor
-      container.querySelectorAll('.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline')
-        .forEach(el => { (el as HTMLElement).style.display = 'none'; });
+      // Remove BlockNote's DropCursor elements (they persist because we stopPropagation)
+      removeBNDropCursors();
 
       // Show vertical line indicator
       createColumnLine();
@@ -2883,7 +2888,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
 
     const handleColumnDrop = (e: DragEvent) => {
-      clearColumnHighlight();
+      removeColumnLine();
+      removeBNDropCursors();
 
       const dragData = getBlockDragData();
       if (!dragData || dragData.blocks.length === 0) return;
@@ -3024,12 +3030,16 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     container.addEventListener('dragover', handleColumnDragOver, true);
     container.addEventListener('drop', handleColumnDrop, true);
     container.addEventListener('dragleave', handleColumnDragLeave);
+    const handleColumnDragEnd = () => { removeColumnLine(); removeBNDropCursors(); };
+    document.addEventListener('dragend', handleColumnDragEnd);
     return () => {
       container.removeEventListener('dragover', handleColumnDragOver, true);
       container.removeEventListener('drop', handleColumnDrop, true);
       container.removeEventListener('dragleave', handleColumnDragLeave);
+      document.removeEventListener('dragend', handleColumnDragEnd);
       clearColumnHighlight();
       removeColumnLine();
+      removeBNDropCursors();
     };
   }, [editor, readOnly]);
 
