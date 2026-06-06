@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createReactBlockSpec } from '@blocknote/react';
 import { Plus } from 'lucide-react';
-import { findBlockDeep } from './BlockNoteComponents';
 
 // ─── Column Block ──────────────────────────────────────────────
 
@@ -303,32 +302,58 @@ function ColumnListComponent({ block, editor }: any) {
     };
   }, [block.id, updateSelection]);
 
-  // Add a new column
+  // Add a new column — new column gets 1/(n+1) of width, others scale proportionally
   const addColumn = useCallback(() => {
     const newCount = columnCount + 1;
-    const equalRatio = Math.round(100 / newCount);
+    if (newCount > MAX_COLUMNS) return;
 
-    children.forEach((child: any) => {
-      editor.updateBlock(child.id, {
+    const newColumnWidth = Math.round(100 / newCount);
+    const scaleFactor = (100 - newColumnWidth) / 100;
+
+    // Scale existing columns' widths proportionally and build new children array
+    let remaining = 100 - newColumnWidth;
+    const scaledChildren = children.map((child: any, i: number) => {
+      const oldRatio = child.props?.widthRatio || Math.round(100 / columnCount);
+      let newRatio: number;
+      if (i < children.length - 1) {
+        newRatio = Math.max(MIN_RATIO, Math.round(oldRatio * scaleFactor));
+        remaining -= newRatio;
+      } else {
+        newRatio = Math.max(MIN_RATIO, remaining);
+      }
+      return {
         type: 'column',
-        props: { widthRatio: equalRatio },
-      } as any);
+        props: { widthRatio: newRatio },
+        children: (child.children || []).map((c: any) => ({
+          type: c.type,
+          props: c.props,
+          content: c.content,
+          children: c.children || [],
+        })),
+      };
     });
 
-    editor.insertBlocks(
-      [{
-        type: 'column',
-        props: { widthRatio: equalRatio },
-        children: [{ type: 'paragraph' }],
-      }],
-      block.id,
-      'childLast',
-    );
+    const newColumn = {
+      type: 'column',
+      props: { widthRatio: newColumnWidth },
+      children: [{ type: 'paragraph' as const }],
+    };
+
+    const finalChildren = [...scaledChildren, newColumn];
+    const newRatios = finalChildren.map((c: any) => c.props.widthRatio).join(',');
+
+    // Atomically replace all children using updateBlock
+    editor.updateBlock(block.id, {
+      type: 'column_list',
+      props: { columnRatios: newRatios },
+      children: finalChildren,
+    } as any);
   }, [block.id, children, columnCount, editor]);
 
-  // Delete a column
+  // Delete a column — removed column's width is redistributed proportionally to remaining columns
   const deleteColumn = useCallback((colIndex: number) => {
     if (columnCount <= 1) {
+      // Last column → dissolve column_list, promote content to root level
       const allContent: any[] = [];
       children.forEach((child: any) => {
         if (child.children && child.children.length > 0) {
@@ -342,23 +367,40 @@ function ColumnListComponent({ block, editor }: any) {
       return;
     }
 
-    const childToRemove = children[colIndex];
-    if (!childToRemove) return;
-    editor.removeBlocks([childToRemove]);
+    // More than 2 columns remaining after deletion → use updateBlock with children
+    const remainingChildren = children.filter((_: any, i: number) => i !== colIndex);
+    const deletedRatio = children[colIndex]?.props?.widthRatio || Math.round(100 / columnCount);
+    const scaleFactor = 100 / (100 - deletedRatio);
 
-    const newCount = columnCount - 1;
-    const equalRatio = Math.round(100 / newCount);
-    setTimeout(() => {
-      const updatedBlock = findBlockDeep(editor.document, block.id);
-      if (updatedBlock) {
-        (updatedBlock.children || []).forEach((child: any) => {
-          editor.updateBlock(child.id, {
-            type: 'column',
-            props: { widthRatio: equalRatio },
-          } as any);
-        });
+    let widthRemaining = 100;
+    const rebuiltChildren = remainingChildren.map((child: any, i: number) => {
+      const oldRatio = child.props?.widthRatio || Math.round(100 / columnCount);
+      let newRatio: number;
+      if (i < remainingChildren.length - 1) {
+        newRatio = Math.max(MIN_RATIO, Math.round(oldRatio * scaleFactor));
+        widthRemaining -= newRatio;
+      } else {
+        newRatio = Math.max(MIN_RATIO, widthRemaining);
       }
-    }, 0);
+      return {
+        type: 'column',
+        props: { widthRatio: newRatio },
+        children: (child.children || []).map((c: any) => ({
+          type: c.type,
+          props: c.props,
+          content: c.content,
+          children: c.children || [],
+        })),
+      };
+    });
+
+    const newRatios = rebuiltChildren.map((c: any) => c.props.widthRatio).join(',');
+
+    editor.updateBlock(block.id, {
+      type: 'column_list',
+      props: { columnRatios: newRatios },
+      children: rebuiltChildren,
+    } as any);
   }, [block, children, columnCount, editor]);
 
   // Resize handler

@@ -2763,9 +2763,11 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
 
     interface ColumnDropTarget {
+      type: 'create' | 'addColumn';  // create: new column_list, addColumn: add to existing
       blockId: string;
       blockOuter: HTMLElement;
       side: 'left' | 'right';
+      columnListId?: string;          // for addColumn: the target column_list block id
     }
 
     const findColumnDropTarget = (clientX: number, clientY: number): ColumnDropTarget | null => {
@@ -2776,22 +2778,60 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const blockOuter = htmlEl.closest('.bn-block-outer') as HTMLElement;
       if (!blockOuter) return null;
 
-      // Don't create columns from column or column_list blocks themselves
       const blockContent = blockOuter.querySelector('[data-content-type]');
       if (!blockContent) return null;
       const contentType = blockContent.getAttribute('data-content-type');
-      if (contentType === 'column' || contentType === 'column_list') return null;
-
       const blockId = blockOuter.querySelector('[data-id]')?.getAttribute('data-id');
       if (!blockId) return null;
 
+      // Case 1: Dropped on column_list outer → add column to existing column_list
+      if (contentType === 'column_list') {
+        const rect = blockOuter.getBoundingClientRect();
+        const relX = (clientX - rect.left) / rect.width;
+        return {
+          type: 'addColumn',
+          blockId,
+          blockOuter,
+          side: relX < 0.5 ? 'left' : 'right',
+          columnListId: blockId,
+        };
+      }
+
+      // Case 2 & 3: Dropped on a column or content block inside a column
+      // Walk up through .bn-block-outer ancestors to find a parent column_list
+      {
+        let ancestor = blockOuter.parentElement;
+        while (ancestor) {
+          const parentOuter = ancestor.closest('.bn-block-outer') as HTMLElement;
+          if (parentOuter && parentOuter !== blockOuter) {
+            const parentCT = parentOuter.querySelector('[data-content-type]')?.getAttribute('data-content-type');
+            if (parentCT === 'column_list') {
+              const colListId = parentOuter.querySelector('[data-id]')?.getAttribute('data-id');
+              if (colListId) {
+                const rect = parentOuter.getBoundingClientRect();
+                const relX = (clientX - rect.left) / rect.width;
+                return {
+                  type: 'addColumn',
+                  blockId: colListId,
+                  blockOuter: parentOuter,
+                  side: relX < 0.5 ? 'left' : 'right',
+                  columnListId: colListId,
+                };
+              }
+            }
+          }
+          ancestor = parentOuter?.parentElement || ancestor.parentElement;
+        }
+      }
+
+      // Case 4: Normal block — create new column_list (original behavior)
       const rect = blockOuter.getBoundingClientRect();
       const relX = (clientX - rect.left) / rect.width;
 
       if (relX < EDGE_ZONE) {
-        return { blockId, blockOuter, side: 'left' };
+        return { type: 'create', blockId, blockOuter, side: 'left' };
       } else if (relX > (1 - EDGE_ZONE)) {
-        return { blockId, blockOuter, side: 'right' };
+        return { type: 'create', blockId, blockOuter, side: 'right' };
       }
       return null;
     };
@@ -2809,17 +2849,19 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         return;
       }
 
-      // Don't drop on self
-      if (dragData.blockIds.includes(target.blockId)) {
+      // Don't drop on self (for create type)
+      if (target.type === 'create' && dragData.blockIds.includes(target.blockId)) {
         clearColumnHighlight();
         return;
       }
 
-      // Don't allow if either block is already inside a column
-      const isInsideColumn = !!target.blockOuter.closest('[data-content-type="column"]');
-      if (isInsideColumn) {
-        clearColumnHighlight();
-        return;
+      // For create type: don't allow if target is inside a column
+      if (target.type === 'create') {
+        const isInsideColumn = !!target.blockOuter.closest('[data-content-type="column"]');
+        if (isInsideColumn) {
+          clearColumnHighlight();
+          return;
+        }
       }
 
       e.preventDefault();
@@ -2849,11 +2891,6 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const target = findColumnDropTarget(e.clientX, e.clientY);
       if (!target) return;
 
-      if (dragData.blockIds.includes(target.blockId)) return;
-
-      const isInsideColumn = !!target.blockOuter.closest('[data-content-type="column"]');
-      if (isInsideColumn) return;
-
       e.preventDefault();
       e.stopPropagation();
 
@@ -2861,43 +2898,120 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const draggedBlock = dragData.blocks[0];
       const draggedBlockId = dragData.blockIds[0];
 
-      // Build the two column children
-      const makeColumnChild = (block: any) => ({
-        type: 'column',
-        props: { widthRatio: 50 },
-        children: [{
-          type: block.type,
-          props: block.props,
-          content: block.content,
-          children: block.children || [],
-        }],
-      });
-
-      const leftChild = target.side === 'left'
-        ? makeColumnChild(draggedBlock)
-        : makeColumnChild(findBlockDeep(editor.document, target.blockId));
-      const rightChild = target.side === 'left'
-        ? makeColumnChild(findBlockDeep(editor.document, target.blockId))
-        : makeColumnChild(draggedBlock);
-
       try {
-        // Insert the column_list before the target block
-        editor.insertBlocks([{
-          type: 'column_list',
-          props: { columnRatios: '50,50' },
-          children: [leftChild, rightChild],
-        }], target.blockId, 'before');
+        if (target.type === 'addColumn') {
+          // ── Add column to existing column_list using updateBlock with children ──
+          const columnListBlock = findBlockDeep(editor.document, target.columnListId!);
+          if (!columnListBlock) return;
 
-        // Remove the original blocks
-        editor.removeBlocks([findBlockDeep(editor.document, target.blockId)!]);
-        if (draggedBlockId !== target.blockId) {
+          // Don't allow dragging from inside the same column_list
+          if (dragData.blockIds.includes(target.columnListId!)) return;
+
+          const currentChildren = columnListBlock.children || [];
+          const currentCount = currentChildren.length;
+          if (currentCount >= 5) return; // max 5 columns
+
+          // Calculate new widths: new column gets 1/(n+1), others scale proportionally
+          const newCount = currentCount + 1;
+          const newColumnWidth = Math.round(100 / newCount);
+          const scaleFactor = (100 - newColumnWidth) / 100;
+
+          // Build the new column with the dragged block's content
+          const newColumnData = {
+            type: 'column',
+            props: { widthRatio: newColumnWidth },
+            children: [{
+              type: draggedBlock.type,
+              props: draggedBlock.props,
+              content: draggedBlock.content,
+              children: draggedBlock.children || [],
+            }],
+          };
+
+          // Scale existing columns' widths proportionally
+          let remaining = 100 - newColumnWidth;
+          const scaledChildren = currentChildren.map((child: any, i: number) => {
+            const oldRatio = child.props?.widthRatio || Math.round(100 / currentCount);
+            let newRatio: number;
+            if (i < currentChildren.length - 1) {
+              newRatio = Math.max(15, Math.round(oldRatio * scaleFactor));
+              remaining -= newRatio;
+            } else {
+              newRatio = Math.max(15, remaining);
+            }
+            return {
+              type: 'column',
+              props: { widthRatio: newRatio },
+              children: (child.children || []).map((c: any) => ({
+                type: c.type,
+                props: c.props,
+                content: c.content,
+                children: c.children || [],
+              })),
+            };
+          });
+
+          // Build final children array: new column at start or end
+          const finalChildren = target.side === 'left'
+            ? [newColumnData, ...scaledChildren]
+            : [...scaledChildren, newColumnData];
+
+          // Atomically replace all children using updateBlock
+          editor.updateBlock(columnListBlock, {
+            type: 'column_list',
+            props: { columnRatios: finalChildren.map((c: any) => c.props.widthRatio).join(',') },
+            children: finalChildren,
+          } as any);
+
+          // Remove the original dragged block
           const draggedBlockInDoc = findBlockDeep(editor.document, draggedBlockId);
           if (draggedBlockInDoc) editor.removeBlocks([draggedBlockInDoc]);
-        }
 
-        markDragHandled();
+          markDragHandled();
+        } else {
+          // ── Create new column_list (original behavior) ──
+          if (dragData.blockIds.includes(target.blockId)) return;
+
+          const isInsideColumn = !!target.blockOuter.closest('[data-content-type="column"]');
+          if (isInsideColumn) return;
+
+          // Build the two column children
+          const makeColumnChild = (block: any) => ({
+            type: 'column',
+            props: { widthRatio: 50 },
+            children: [{
+              type: block.type,
+              props: block.props,
+              content: block.content,
+              children: block.children || [],
+            }],
+          });
+
+          const leftChild = target.side === 'left'
+            ? makeColumnChild(draggedBlock)
+            : makeColumnChild(findBlockDeep(editor.document, target.blockId));
+          const rightChild = target.side === 'left'
+            ? makeColumnChild(findBlockDeep(editor.document, target.blockId))
+            : makeColumnChild(draggedBlock);
+
+          // Insert the column_list before the target block
+          editor.insertBlocks([{
+            type: 'column_list',
+            props: { columnRatios: '50,50' },
+            children: [leftChild, rightChild],
+          }], target.blockId, 'before');
+
+          // Remove the original blocks
+          editor.removeBlocks([findBlockDeep(editor.document, target.blockId)!]);
+          if (draggedBlockId !== target.blockId) {
+            const draggedBlockInDoc = findBlockDeep(editor.document, draggedBlockId);
+            if (draggedBlockInDoc) editor.removeBlocks([draggedBlockInDoc]);
+          }
+
+          markDragHandled();
+        }
       } catch (err) {
-        console.error('[PageEditor] Failed to create column layout:', err);
+        console.error('[PageEditor] Failed to create/modify column layout:', err);
       }
     };
 
