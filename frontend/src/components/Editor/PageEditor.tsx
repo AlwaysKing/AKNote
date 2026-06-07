@@ -2931,19 +2931,39 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         }
 
         // ── Case 4: Normal root-level block ──
-        const rect = blockOuter.getBoundingClientRect();
-        if (clientX - rect.left < EDGE_ZONE_PX) {
-          return { type: 'create', blockId, blockOuter, side: 'left' };
-        }
-        if (rect.right - clientX < EDGE_ZONE_PX) {
-          return { type: 'create', blockId, blockOuter, side: 'right' };
-        }
-        // Middle area → let BN handle (don't intercept)
+        // Inside the block → let BN handle up/down reorder.
+        // Front/back insert only triggers when cursor is OUTSIDE the block,
+        // handled by Phase 2b below.
         return null;
       }
 
       // ── Phase 2: No .bn-block-outer hit — check gap/padding of column_list ──
-      return findColumnDropTargetPhase2(clientX, clientY);
+      const p2Result = findColumnDropTargetPhase2(clientX, clientY);
+      if (p2Result) return p2Result;
+
+      // ── Phase 2b: Cursor outside any block — check root block edges ──
+      // Trigger create when cursor is past a root block's edge.
+      {
+        const rootBlocks = document.querySelectorAll(
+          '.bn-editor > .bn-block-group > .bn-block-outer'
+        );
+        const EDGE_PX = 30; // trigger within 30px outside the block edge
+        for (const rOuter of rootBlocks) {
+          const bEl = rOuter as HTMLElement;
+          const bR = bEl.getBoundingClientRect();
+          if (clientY < bR.top || clientY > bR.bottom) continue;
+          if (clientX < bR.left - EDGE_PX) {
+            const bId = bEl.querySelector('[data-id]')?.getAttribute('data-id');
+            if (bId) return { type: 'create', blockId: bId, blockOuter: bEl, side: 'left' };
+          }
+          if (clientX > bR.right + EDGE_PX) {
+            const bId = bEl.querySelector('[data-id]')?.getAttribute('data-id');
+            if (bId) return { type: 'create', blockId: bId, blockOuter: bEl, side: 'right' };
+          }
+        }
+      }
+
+      return null;
     };
 
     /** Helper: find the column_list's .bn-block-outer ancestor of a given block */
@@ -3120,8 +3140,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       }
 
       e.preventDefault();
-      // Don't stopPropagation — let BN's dropcursor plugin update its internal state
-      // so it can recover when we later return null (normal blocks)
+      e.stopPropagation(); // Prevent BN's dropcursor from showing simultaneously
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
 
       // Hide BN's dropcursor visuals (we show our own indicator)
@@ -3368,15 +3387,16 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       }
     };
 
-    container.addEventListener('dragover', handleColumnDragOver, true);
-    container.addEventListener('drop', handleColumnDrop, true);
-    container.addEventListener('dragleave', handleColumnDragLeave);
+    // Register on document so dragover fires even when cursor is outside the container.
+    document.addEventListener('dragover', handleColumnDragOver, true);
+    document.addEventListener('drop', handleColumnDrop, true);
+    document.addEventListener('dragleave', handleColumnDragLeave);
     const handleColumnDragEnd = () => { removeColumnLine(); removeBNDropCursors(); };
     document.addEventListener('dragend', handleColumnDragEnd);
     return () => {
-      container.removeEventListener('dragover', handleColumnDragOver, true);
-      container.removeEventListener('drop', handleColumnDrop, true);
-      container.removeEventListener('dragleave', handleColumnDragLeave);
+      document.removeEventListener('dragover', handleColumnDragOver, true);
+      document.removeEventListener('drop', handleColumnDrop, true);
+      document.removeEventListener('dragleave', handleColumnDragLeave);
       document.removeEventListener('dragend', handleColumnDragEnd);
       clearColumnHighlight();
       removeColumnLine();
