@@ -2822,15 +2822,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
         // ── Case 1: Hit column_list outer ──
         if (contentType === 'column_list') {
-          const rect = blockOuter.getBoundingClientRect();
-          // Check if in left/right edge zone → addColumn
-          if (clientX - rect.left < EDGE_ZONE_PX) {
-            return { type: 'addColumn', blockId, blockOuter, side: 'left', columnListId: blockId };
-          }
-          if (rect.right - clientX < EDGE_ZONE_PX) {
-            return { type: 'addColumn', blockId, blockOuter, side: 'right', columnListId: blockId };
-          }
-          // Middle area of column_list → let BN handle (return null)
+          // Inside column_list → let Phase 2 handle gap/edge detection
           return null;
         }
 
@@ -2904,14 +2896,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
           if (colListOuter) {
             const colListId = colListOuter.querySelector('[data-id]')?.getAttribute('data-id');
 
-            // Check left/right edge of column_list → addColumn
-            const clRect = colListOuter.getBoundingClientRect();
-            if (clientX - clRect.left < EDGE_ZONE_PX && colListId) {
-              return { type: 'addColumn', blockId: colListId, blockOuter: colListOuter, side: 'left', columnListId: colListId };
-            }
-            if (clRect.right - clientX < EDGE_ZONE_PX && colListId) {
-              return { type: 'addColumn', blockId: colListId, blockOuter: colListOuter, side: 'right', columnListId: colListId };
-            }
+            // addColumn is handled by Phase 2 when cursor is outside column_list
 
             // Determine above/below based on cursor Y relative to the content block
             const bRect = blockOuter.getBoundingClientRect();
