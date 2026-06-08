@@ -2766,31 +2766,29 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       if (columnLineEl) { columnLineEl.remove(); columnLineEl = null; }
     };
 
+    const DROP_CURSOR_SELECTOR =
+      '.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline, ' +
+      '.prosemirror-dropcursor-block-horizontal, .prosemirror-dropcursor-block-vertical-left, ' +
+      '.prosemirror-dropcursor-block-vertical-right, .prosemirror-dropcursor-vertical';
+
     /** Hide BlockNote's DropCursor elements (instead of removing, to preserve BN's internal state) */
     const hideBNDropCursors = () => {
-      container.querySelectorAll(
-        '.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline, ' +
-        '.prosemirror-dropcursor-block-horizontal, .prosemirror-dropcursor-block-vertical-left, ' +
-        '.prosemirror-dropcursor-block-vertical-right, .prosemirror-dropcursor-vertical'
-      ).forEach(el => { (el as HTMLElement).style.display = 'none'; });
+      // Use document, not container — BN appends dropcursor to PM view's offsetParent,
+      // which may be outside the container element.
+      document.querySelectorAll(DROP_CURSOR_SELECTOR)
+        .forEach(el => { (el as HTMLElement).style.display = 'none'; });
     };
 
     /** Restore BlockNote's DropCursor elements that were previously hidden */
     const showBNDropCursors = () => {
-      container.querySelectorAll(
-        '.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline, ' +
-        '.prosemirror-dropcursor-block-horizontal, .prosemirror-dropcursor-block-vertical-left, ' +
-        '.prosemirror-dropcursor-block-vertical-right, .prosemirror-dropcursor-vertical'
-      ).forEach(el => { (el as HTMLElement).style.display = ''; });
+      document.querySelectorAll(DROP_CURSOR_SELECTOR)
+        .forEach(el => { (el as HTMLElement).style.display = ''; });
     };
 
     /** Permanently remove BN dropcursor elements (only for drop/dragend/cleanup) */
     const removeBNDropCursors = () => {
-      container.querySelectorAll(
-        '.prosemirror-dropcursor-block, .prosemirror-dropcursor-inline, ' +
-        '.prosemirror-dropcursor-block-horizontal, .prosemirror-dropcursor-block-vertical-left, ' +
-        '.prosemirror-dropcursor-block-vertical-right, .prosemirror-dropcursor-vertical'
-      ).forEach(el => el.remove());
+      document.querySelectorAll(DROP_CURSOR_SELECTOR)
+        .forEach(el => el.remove());
     };
 
     interface ColumnDropTarget {
@@ -2900,10 +2898,25 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
             // addColumn is handled by Phase 2 when cursor is outside column_list
 
-            // Determine above/below based on cursor Y relative to the content block
             const bRect = blockOuter.getBoundingClientRect();
             const relY = (clientY - bRect.top) / bRect.height;
-            const pos: 'above' | 'below' = relY < 0.5 ? 'above' : 'below';
+
+            // Use a dead-zone at the boundary: if cursor is very close to the
+            // edge, snap to the edge position instead of toggling above/below.
+            // This prevents two adjacent lines flickering when cursor is on the
+            // boundary between two blocks.
+            const DEAD_ZONE = 0.15;
+            let pos: 'above' | 'below';
+            if (relY < 0.5 - DEAD_ZONE) {
+              pos = 'above';
+            } else if (relY > 0.5 + DEAD_ZONE) {
+              pos = 'below';
+            } else {
+              // In dead zone — keep the previous position to avoid flickering
+              pos = lastDragTarget?.type === 'insertInColumn' && lastDragTarget.position
+                ? lastDragTarget.position
+                : (relY < 0.5 ? 'above' : 'below');
+            }
 
             // Column-internal insert: move block within the column
             return {
@@ -3091,7 +3104,37 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
               }
               return null;
             }
-            // Inside content area but hit nothing → let BN handle
+            // Inside content area (between two blocks) → find the nearest content block
+            // This prevents BN from drawing its own dropcursor alongside ours
+            for (let j = 0; j < contentBlocks.length; j++) {
+              const cbRect = contentBlocks[j].getBoundingClientRect();
+              if (clientY < cbRect.bottom) {
+                // Cursor is above the bottom of this block → insert above it
+                const cbId = contentBlocks[j].querySelector('[data-id]')?.getAttribute('data-id');
+                if (cbId) {
+                  return { type: 'insertInColumn', blockId: colListId, blockOuter: contentBlocks[j] as HTMLElement, side: 'left', position: 'above', columnListId: colListId, columnBlockId: cbId, insertWidth: colRect.width };
+                }
+                break;
+              }
+              // Cursor is below this block → check if there's a next block
+              if (j < contentBlocks.length - 1) {
+                const nextRect = contentBlocks[j + 1].getBoundingClientRect();
+                if (clientY < nextRect.top) {
+                  // Cursor is in the gap between this block and the next → insert below this block
+                  const cbId = contentBlocks[j].querySelector('[data-id]')?.getAttribute('data-id');
+                  if (cbId) {
+                    return { type: 'insertInColumn', blockId: colListId, blockOuter: contentBlocks[j] as HTMLElement, side: 'right', position: 'below', columnListId: colListId, columnBlockId: cbId, insertWidth: colRect.width };
+                  }
+                  break;
+                }
+              } else {
+                // Last block, cursor is below it → insert below
+                const cbId = contentBlocks[j].querySelector('[data-id]')?.getAttribute('data-id');
+                if (cbId) {
+                  return { type: 'insertInColumn', blockId: colListId, blockOuter: contentBlocks[j] as HTMLElement, side: 'right', position: 'below', columnListId: colListId, columnBlockId: cbId, insertWidth: colRect.width };
+                }
+              }
+            }
             return null;
           }
         }
@@ -3149,16 +3192,20 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         columnLineEl!.style.top = (target.position === 'above' ? rect.top - 2 : rect.bottom + 2) + 'px';
         columnLineEl!.style.display = 'block';
       } else if (target.type === 'insertInColumn' || target.type === 'moveBlock') {
-        // Horizontal blue line (single-column or full-width, 4px high) at the block's edge
+        // Horizontal blue line at the block's edge.
+        // Use the same Y position for above/below at the boundary between blocks
+        // to avoid flickering when elementFromPoint alternates between blocks.
         const rect = target.blockOuter.getBoundingClientRect();
         const lineW = target.insertWidth || rect.width;
-        // Center the line horizontally on the content block
         const centerX = rect.left + rect.width / 2;
+        // Both 'above' and 'below' use the same edge: rect.top for above, rect.bottom for below.
+        // Since blocks are flush (block_A.bottom === block_B.top), both render at the same Y.
+        const lineY = target.position === 'above' ? rect.top : rect.bottom;
         columnLineEl!.style.width = lineW + 'px';
         columnLineEl!.style.height = '4px';
         columnLineEl!.style.background = '#ddeeff';
         columnLineEl!.style.left = (centerX - lineW / 2) + 'px';
-        columnLineEl!.style.top = (target.position === 'above' ? rect.top - 2 : rect.bottom + 2) + 'px';
+        columnLineEl!.style.top = (lineY - 2) + 'px'; // center the 4px line on the edge
         columnLineEl!.style.display = 'block';
       } else {
         // Vertical blue line (create / addColumn)
