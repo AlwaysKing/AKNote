@@ -695,7 +695,7 @@ function ColumnListComponent({ block, editor }: any) {
       // Directly update CSS for instant visual feedback (don't wait for React re-render)
       const styleEl = document.getElementById(`col-style-${block.id}`);
       if (styleEl) {
-        const gs = allRatios.length > 1 ? ((allRatios.length - 1) * 52) / allRatios.length : 0;
+        const gs = allRatios.length > 1 ? ((allRatios.length - 1) * COLUMN_GAP_PX) / allRatios.length : 0;
         let css = `
 .bn-block-outer:has([data-column-list-id="${block.id}"]) {
   flex-shrink: 0 !important;
