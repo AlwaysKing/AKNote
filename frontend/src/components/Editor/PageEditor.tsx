@@ -24,6 +24,9 @@ import { SubpageBlockSpec } from './SubpageBlock';
 import { ColumnListBlockSpec, ColumnBlockSpec, redistributeColumnRatios, redistributeColumnRatiosFromWidths, updateColumnListRatios } from './ColumnListBlock';
 import LinkPasteMenu from './LinkPasteMenu';
 import CodeBlockToolbar from './CodeBlockToolbar';
+import { FindReplaceExtension } from './FindReplaceExtension';
+import FindReplacePanel from './FindReplacePanel';
+import './findReplace.css';
 import { getBlockDragData, markDragHandled } from './blockDragState';
 import { pageMetaCache } from './PageMetaCache';
 import { mentionMetaCache } from './MentionMetaCache';
@@ -1787,13 +1790,54 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       const result = await uploadApi.upload(file, { pageId, spaceSlug });
       return result.path;
     },
-    _tiptapOptions: { extensions: [CustomInputRules, NumberedListIndexFix, InternalLinkBadge, TableCellHighlight, TableHeaderIndicators, ColumnDropPlugin] },
+    _tiptapOptions: { extensions: [CustomInputRules, NumberedListIndexFix, InternalLinkBadge, TableCellHighlight, TableHeaderIndicators, ColumnDropPlugin, FindReplaceExtension] },
   } as any);
 
   // Wire up the editor ref for ToggleHeadingInputRules
   useEffect(() => {
     bnEditorRef.current = editor;
   }, [editor]);
+
+  // Find & Replace panel state
+  const [findReplace, setFindReplace] = useState<{ open: boolean; mode: 'find' | 'replace' }>({
+    open: false,
+    mode: 'find',
+  });
+
+  // Global keyboard shortcuts: Ctrl/Cmd+F opens find, Ctrl/Cmd+H opens replace,
+  // Escape closes the find/replace panel if it is open.
+  // We preventDefault so the browser's native find dialog never appears.
+  // A ref tracks the panel open state so this listener can be registered once
+  // and still react to the current state.
+  const findReplaceOpenRef = useRef(false);
+  findReplaceOpenRef.current = findReplace.open;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Escape closes the panel first, before any editor-level handling.
+      if (e.key === 'Escape') {
+        if (findReplaceOpenRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          setFindReplace((s) => ({ ...s, open: false }));
+          return;
+        }
+        return;
+      }
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 'f') {
+        e.preventDefault();
+        setFindReplace({ open: true, mode: 'find' });
+      } else if (key === 'h') {
+        e.preventDefault();
+        setFindReplace({ open: true, mode: 'replace' });
+      }
+    };
+    // Use capture phase so we intercept Escape before the editor can act on it.
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
 
   // Populate page metadata cache from pageTree
   useEffect(() => {
@@ -5418,6 +5462,14 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       <CodeBlockToolbar editorContainer={editorEl} />
       {/* Table cell menu — notch hover detection + cell context menu */}
       <TableCellMenu editorContainer={editorEl} />
+      {/* Find & Replace floating panel */}
+      {findReplace.open && (
+        <FindReplacePanel
+          editor={editor as any}
+          initialMode={findReplace.mode}
+          onClose={() => setFindReplace((s) => ({ ...s, open: false }))}
+        />
+      )}
       {/* Clickable area below editor — click to append new paragraph */}
       {!readOnly && (
         <div

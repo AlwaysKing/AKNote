@@ -1,0 +1,14 @@
+/* Find & Replace match highlights.
+ *
+ * Applied to ProseMirror inline Decorations created by FindReplaceExtension.
+ */
+
+.find-match {
+  background: rgba(255, 213, 79, 0.5);
+  border-radius: 2px;
+}
+
+.find-match-current {
+  background: #ffe664;
+  border-radius: 2px;
+}
