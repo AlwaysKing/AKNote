@@ -1,6 +1,9 @@
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 
+# postinstall 脚本用 bash，alpine 默认只有 ash
+RUN apk add --no-cache bash
+
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install
