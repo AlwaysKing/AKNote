@@ -994,18 +994,38 @@ const SuggestionMenuRoot: React.FC<{
         item.removeAttribute('data-selected');
       }
     });
+    // 键盘导航时，让选中项滚到菜单可视区域
+    // 只改 menu.scrollTop 而不用 scrollIntoView —— scrollIntoView 会滚动所有
+    // 可滚动祖先（页面/编辑器都会跟着跳），改 scrollTop 只滚菜单本身
+    if (keyboardActive && keyboardIdx >= 0 && keyboardIdx < items.length) {
+      const item = items[keyboardIdx] as HTMLElement;
+      const menuRect = menu.getBoundingClientRect();
+      const itemRect = item.getBoundingClientRect();
+      if (itemRect.top < menuRect.top) {
+        menu.scrollTop -= menuRect.top - itemRect.top;
+      } else if (itemRect.bottom > menuRect.bottom) {
+        menu.scrollTop += itemRect.bottom - menuRect.bottom;
+      }
+    }
   }, [keyboardActive, keyboardIdx]);
 
-  // Reset state when children change (query filtering)
-  const prevChildrenRef = useRef(children);
-  useEffect(() => {
-    if (children !== prevChildrenRef.current) {
-      prevChildrenRef.current = children;
+  // Reset state ONLY when items count actually changes (real query filtering),
+  // NOT on every BlockNote re-render (which always creates a new children reference).
+  // BlockNote passes a new children prop on every keystroke/re-render even when
+  // the visible items are identical, so comparing by reference would reset
+  // keyboardIdxRef to -1 on every key press and break navigation.
+  const prevItemCountRef = useRef(0);
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const currentItemCount = menu.querySelectorAll('.bn-suggestion-menu-item').length;
+    if (prevItemCountRef.current !== 0 && currentItemCount !== prevItemCountRef.current) {
       hoveredIdxRef.current = -1;
       keyboardIdxRef.current = -1;
       setKeyboardActive(false);
       setKeyboardIdx(-1);
     }
+    prevItemCountRef.current = currentItemCount;
   }, [children]);
 
   return (
