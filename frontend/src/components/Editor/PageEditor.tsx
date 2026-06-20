@@ -4483,11 +4483,42 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     const container = editorRef.current;
     if (!container || readOnly) return;
 
+    // Hoist the scroll container once — needed by mousedown, mousemove, scroll,
+    // and the auto-scroll RAF. All rect math is anchored in this container's
+    // document coords (viewport coord + scrollTop/Left) so selection survives
+    // scrolling instead of being pinned to the viewport.
+    //
+    // Assumption: scrollableArea's viewport position does NOT change as it
+    // itself scrolls (i.e., no ancestor scroll container, no transform that
+    // shifts origin). The anchor (`clientX + scrollLeft`) and block hit-test
+    // (`r.left + scrollLeft`) both use the same conversion, so they stay
+    // consistent with each other even if the absolute reference is "pseudo-
+    // document" rather than true document coords.
+    const scrollableArea = container.closest('.overflow-y-auto') as HTMLElement | null;
+    if (!scrollableArea) return;
+
     let isDragging = false;
     let dragOccurred = false;
-    let startX = 0;
-    let startY = 0;
+    // Anchor in DOCUMENT coords (clientX + scrollLeft, clientY + scrollTop).
+    // Fixed in document space → immune to scrolling.
+    let startDocX = 0;
+    let startDocY = 0;
     let selectionRect: HTMLDivElement | null = null;
+    // Shift-toggle: at mousedown we snapshot the current selection as `base`.
+    // Each frame we XOR the current intersect against base — blocks under the
+    // rect flip (add if absent, remove if present).
+    let shiftMode = false;
+    let baseSelectedIds: Set<string> = new Set();
+    // Last known mouse viewport position — used to recompute selection when
+    // the user scrolls without moving the mouse (wheel/trackpad).
+    let lastMouseClientX = 0;
+    let lastMouseClientY = 0;
+    // Auto-scroll at viewport edges (Notion-style). `autoScrollDir` is -1 / 0 / +1;
+    // the RAF loop adjusts scrollTop each frame while the mouse is in the zone.
+    let autoScrollRaf: number | null = null;
+    let autoScrollDir: 0 | -1 | 1 = 0;
+    const EDGE_THRESHOLD = 60;  // px from edge that triggers auto-scroll
+    const MAX_AUTO_SPEED = 14;  // max px per frame, scaled by depth into edge
 
     function updateSelection(ids: string[]) {
       setBlockSelection(ids.length > 0 ? ids : null);
@@ -4696,14 +4727,57 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       }
     };
 
+    // Shift+click on a single block: toggle that block in/out of selection.
+    // Registered on `container` in CAPTURE phase so it runs before BlockNote's
+    // own mousedown handler (which would otherwise focus the editor into edit
+    // mode). stopImmediatePropagation prevents the event from reaching the
+    // document-level bubble-phase handleMouseDown below, and we set
+    // dragOccurred=true so the subsequent click handler leaves the new
+    // selection alone.
+    //
+    // Limitation: capture-phase listeners registered on elements DEEPER than
+    // `container` (e.g., inside the ProseMirror editor) would still fire
+    // before ours, since capture propagates from the outside in. In practice
+    // BlockNote handles block-level interaction in the bubble phase / via
+    // React synthetic events, so this is sufficient. If a future BlockNote
+    // upgrade adds capture-phase mousedown handling inside the editor, switch
+    // this listener to `document` capture or use a different interception
+    // strategy.
+    const handleShiftClickCapture = (e: MouseEvent) => {
+      if (!e.shiftKey || e.button !== 0) return;
+      const target = e.target as HTMLElement;
+      if (!scrollableArea.contains(target)) return;
+
+      const blockOuter = target.closest('.bn-block-outer');
+      if (!blockOuter) return;
+
+      const blockEl = blockOuter.querySelector('[data-id]');
+      if (!blockEl) return;
+      // Skip column_list / column — layout containers, not selectable content.
+      if (blockEl.querySelector('.column-list-inner') || blockEl.querySelector('.column-block-inner')) return;
+      const id = blockEl.getAttribute('data-id');
+      if (!id) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const current = new Set(getSelectedBlockIds());
+      if (current.has(id)) current.delete(id);
+      else current.add(id);
+      updateSelection(Array.from(current));
+
+      dragOccurred = true;
+      dragOccurredRef.current = true;
+      isDragging = false;
+    };
+
     // Mousedown on non-block area: start drag selection
     const handleMouseDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
 
       // Only start in the scrollable content area (covers side whitespace too)
-      const scrollableArea = container.closest('.overflow-y-auto');
-      if (!scrollableArea || !scrollableArea.contains(target)) return;
+      if (!scrollableArea.contains(target)) return;
 
       if (target.closest('.bn-block-outer')) return;
       if (target.closest('button, a, input, [contenteditable="true"]')) return;
@@ -4712,43 +4786,45 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
       isDragging = true;
       dragOccurred = false;
       dragOccurredRef.current = false;
-      startX = e.clientX;
-      startY = e.clientY;
+
+      // Anchor in document coords so the selection rectangle survives scroll.
+      startDocX = e.clientX + scrollableArea.scrollLeft;
+      startDocY = e.clientY + scrollableArea.scrollTop;
+      lastMouseClientX = e.clientX;
+      lastMouseClientY = e.clientY;
+
+      // Shift mode = toggle (symmetric difference against base snapshot).
+      shiftMode = e.shiftKey;
+      baseSelectedIds = shiftMode ? new Set(getSelectedBlockIds()) : new Set();
+      autoScrollDir = 0;
     };
 
-    // Mousemove: update selection rectangle + highlight intersecting blocks
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
+    // Recompute selection for the given mouse position + current scroll state.
+    // Called from mousemove, scroll, and the auto-scroll RAF tick so any of
+    // those triggers keeps the rect + selected set in sync. All comparisons
+    // happen in document coords (viewport rect + scrollTop/Left), which makes
+    // the selection invariant under scrolling.
+    const computeSelection = (clientX: number, clientY: number) => {
+      const curDocX = clientX + scrollableArea.scrollLeft;
+      const curDocY = clientY + scrollableArea.scrollTop;
+      const rectDocLeft = Math.min(startDocX, curDocX);
+      const rectDocRight = Math.max(startDocX, curDocX);
+      const rectDocTop = Math.min(startDocY, curDocY);
+      const rectDocBottom = Math.max(startDocY, curDocY);
 
-      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
-      if (dist < 5) return;
-
-      if (!dragOccurred) {
-        dragOccurred = true;
-        dragOccurredRef.current = true;
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'default';
-        selectionRect = document.createElement('div');
-        selectionRect.style.cssText =
-          'position:fixed;pointer-events:none;z-index:9999;' +
-          'background:rgba(35,131,226,0.1);border-radius:2px;';
-        document.body.appendChild(selectionRect);
-      }
-
-      const left = Math.min(startX, e.clientX);
-      const top = Math.min(startY, e.clientY);
-      const width = Math.abs(e.clientX - startX);
-      const height = Math.abs(e.clientY - startY);
-
+      // Visual rect is position:fixed (viewport). Recompute top/left from doc
+      // coords every frame so the rectangle follows the document on scroll.
       if (selectionRect) {
-        selectionRect.style.left = `${left}px`;
-        selectionRect.style.top = `${top}px`;
-        selectionRect.style.width = `${width}px`;
-        selectionRect.style.height = `${height}px`;
+        selectionRect.style.left = `${rectDocLeft - scrollableArea.scrollLeft}px`;
+        selectionRect.style.top = `${rectDocTop - scrollableArea.scrollTop}px`;
+        selectionRect.style.width = `${rectDocRight - rectDocLeft}px`;
+        selectionRect.style.height = `${rectDocBottom - rectDocTop}px`;
       }
 
-      // Find intersecting blocks
-      const selRect = { left, top, right: left + width, bottom: top + height };
+      // Intersect in document coords: shift each block's viewport rect by the
+      // current scroll offset so the comparison stays anchored in the document.
+      const sTop = scrollableArea.scrollTop;
+      const sLeft = scrollableArea.scrollLeft;
       const blockOuters = container.querySelectorAll('.bn-block-outer');
       const intersecting: string[] = [];
       const blockOuterMap = new Map<string, Element>();
@@ -4762,8 +4838,12 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         const id = blockEl.getAttribute('data-id')!;
         blockOuterMap.set(id, outer);
         const r = outer.getBoundingClientRect();
-        if (selRect.left < r.right && selRect.right > r.left &&
-            selRect.top < r.bottom && selRect.bottom > r.top) {
+        const bLeft = r.left + sLeft;
+        const bRight = r.right + sLeft;
+        const bTop = r.top + sTop;
+        const bBottom = r.bottom + sTop;
+        if (rectDocLeft < bRight && rectDocRight > bLeft &&
+            rectDocTop < bBottom && rectDocBottom > bTop) {
           intersecting.push(id);
         }
       });
@@ -4858,7 +4938,111 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         }
       }
 
-      updateSelection(result);
+      // Shift mode = symmetric difference against the base snapshot taken at
+      // mousedown. Blocks currently under the rect flip state: added if absent
+      // in base, removed if present in base.
+      let finalIds: string[];
+      if (shiftMode && baseSelectedIds.size > 0) {
+        const merged = new Set(baseSelectedIds);
+        for (const id of result) {
+          if (merged.has(id)) merged.delete(id);
+          else merged.add(id);
+        }
+        finalIds = Array.from(merged);
+      } else {
+        finalIds = result;
+      }
+      updateSelection(finalIds);
+    };
+
+    // Auto-scroll at viewport edges. The RAF loop adjusts scrollTop each frame
+    // while the mouse stays in the edge zone; speed scales linearly with how
+    // deep into the zone the cursor is.
+    const tickAutoScroll = () => {
+      if (!isDragging || autoScrollDir === 0) {
+        autoScrollRaf = null;
+        return;
+      }
+      const areaRect = scrollableArea.getBoundingClientRect();
+      let speed = 0;
+      if (autoScrollDir === -1) {
+        const intoZone = Math.max(0, EDGE_THRESHOLD - (lastMouseClientY - areaRect.top));
+        speed = -Math.max(1, Math.ceil((intoZone / EDGE_THRESHOLD) * MAX_AUTO_SPEED));
+      } else {
+        const intoZone = Math.max(0, EDGE_THRESHOLD - (areaRect.bottom - lastMouseClientY));
+        speed = Math.max(1, Math.ceil((intoZone / EDGE_THRESHOLD) * MAX_AUTO_SPEED));
+      }
+      scrollableArea.scrollTop += speed;
+      // The native scroll event will also call computeSelection, but we recompute
+      // here too so the rect updates on the same frame (scroll events can be
+      // throttled/batched by the browser).
+      computeSelection(lastMouseClientX, lastMouseClientY);
+      autoScrollRaf = requestAnimationFrame(tickAutoScroll);
+    };
+
+    const startAutoScroll = () => {
+      if (autoScrollRaf !== null) return;
+      autoScrollRaf = requestAnimationFrame(tickAutoScroll);
+    };
+
+    const stopAutoScroll = () => {
+      autoScrollDir = 0;
+      if (autoScrollRaf !== null) {
+        cancelAnimationFrame(autoScrollRaf);
+        autoScrollRaf = null;
+      }
+    };
+
+    // Mousemove: update selection rectangle + highlight intersecting blocks
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      lastMouseClientX = e.clientX;
+      lastMouseClientY = e.clientY;
+
+      // Distance threshold checked in viewport coords. The anchor's viewport
+      // position shifts with scroll, so recompute it here from doc coords.
+      const startClientX = startDocX - scrollableArea.scrollLeft;
+      const startClientY = startDocY - scrollableArea.scrollTop;
+      const dist = Math.hypot(e.clientX - startClientX, e.clientY - startClientY);
+      if (dist < 5) return;
+
+      if (!dragOccurred) {
+        dragOccurred = true;
+        dragOccurredRef.current = true;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'default';
+        selectionRect = document.createElement('div');
+        selectionRect.style.cssText =
+          'position:fixed;pointer-events:none;z-index:9999;' +
+          'background:rgba(35,131,226,0.1);border-radius:2px;';
+        document.body.appendChild(selectionRect);
+      }
+
+      computeSelection(e.clientX, e.clientY);
+
+      // Notion-style auto-scroll: when cursor is within EDGE_THRESHOLD of the
+      // scrollable area's top/bottom, kick off the RAF loop.
+      const areaRect = scrollableArea.getBoundingClientRect();
+      const topDist = e.clientY - areaRect.top;
+      const bottomDist = areaRect.bottom - e.clientY;
+      if (topDist >= 0 && topDist < EDGE_THRESHOLD) {
+        autoScrollDir = -1;
+        startAutoScroll();
+      } else if (bottomDist >= 0 && bottomDist < EDGE_THRESHOLD) {
+        autoScrollDir = 1;
+        startAutoScroll();
+      } else if (autoScrollDir !== 0) {
+        stopAutoScroll();
+      }
+    };
+
+    // Scroll: recompute selection with the last known mouse position. Covers
+    // the case where the mouse is stationary but the user scrolls via wheel
+    // or trackpad (the original bug — selection used to be lost because the
+    // rect was anchored in viewport coords and blocks scrolled past it).
+    const handleScroll = () => {
+      if (!isDragging) return;
+      computeSelection(lastMouseClientX, lastMouseClientY);
     };
 
     // Mouseup: clean up drag
@@ -4871,7 +5055,10 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
       }
+      stopAutoScroll();
       isDragging = false;
+      shiftMode = false;
+      baseSelectedIds = new Set();
     };
 
     // Click: clear selection (unless after drag, on side menu, or floating menu is open)
@@ -4896,17 +5083,25 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
     };
 
     document.addEventListener('keydown', handleKeyDown, true);
+    // Shift+click on a single block uses CAPTURE on the editor container so
+    // it runs before BlockNote's mousedown handler (which would focus the
+    // editor into edit mode) and before our document-level bubble handlers.
+    container.addEventListener('mousedown', handleShiftClickCapture, true);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('click', handleClick);
+    scrollableArea.addEventListener('scroll', handleScroll);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
+      container.removeEventListener('mousedown', handleShiftClickCapture, true);
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('click', handleClick);
+      scrollableArea.removeEventListener('scroll', handleScroll);
+      stopAutoScroll();
       selectionRect?.remove();
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
