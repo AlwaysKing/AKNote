@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePageStore } from '../stores/pageStore';
 import { useSpaceStore } from '../stores/spaceStore';
@@ -48,7 +49,9 @@ export default function PageViewPage() {
   }, [spaceSlug, pageId, fetchPage, setCurrentSpace]);
 
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const pageMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [showPageMenu, setShowPageMenu] = useState(false);
+  const [pageMenuPosition, setPageMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [syncStatus, setSyncStatus] = useState<'unsaved' | 'syncing' | 'synced' | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<Date | null>(null);
   const [, setTick] = useState(0);
@@ -109,12 +112,52 @@ export default function PageViewPage() {
   }, [spaceSlug, pageId]);
 
   const handleFullPageToggle = useCallback(async () => {
-    if (!spaceSlug || !pageId || !currentPage) return;
+    if (!spaceSlug || !pageId || !currentPage || currentPage.is_locked) return;
     const newFullPage = !currentPage.full_page;
     await updateMetadata(spaceSlug, pageId, { full_page: newFullPage });
   }, [spaceSlug, pageId, currentPage, updateMetadata]);
 
+  const handleLockedToggle = useCallback(async () => {
+    if (!spaceSlug || !pageId || !currentPage) return;
+    const newLocked = !currentPage.is_locked;
+    await updateMetadata(spaceSlug, pageId, { is_locked: newLocked });
+    if (newLocked) {
+      titleRef.current?.blur();
+    }
+  }, [spaceSlug, pageId, currentPage, updateMetadata]);
+
+  const syncPageMenuPosition = useCallback(() => {
+    const rect = pageMenuButtonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPageMenuPosition({
+      top: rect.bottom + 4,
+      right: window.innerWidth - rect.right,
+    });
+  }, []);
+
+  const togglePageMenu = useCallback(() => {
+    if (showPageMenu) {
+      setShowPageMenu(false);
+      return;
+    }
+    syncPageMenuPosition();
+    setShowPageMenu(true);
+  }, [showPageMenu, syncPageMenuPosition]);
+
+  useEffect(() => {
+    if (!showPageMenu) return;
+
+    const handleWindowChange = () => syncPageMenuPosition();
+    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
+    return () => {
+      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
+    };
+  }, [showPageMenu, syncPageMenuPosition]);
+
   const handleTitleBlur = useCallback(async () => {
+    if (currentPage?.is_locked) return;
     const newTitle = titleRef.current?.textContent?.trim() || '';
     const currentTitle = usePageStore.getState().currentPage?.title;
     if (newTitle && newTitle !== currentTitle && spaceSlug && pageId) {
@@ -123,14 +166,15 @@ export default function PageViewPage() {
     } else if (!newTitle && titleRef.current) {
       titleRef.current.textContent = currentTitle || '未命名页面';
     }
-  }, [spaceSlug, pageId, updateMetadata, refreshPageTree]);
+  }, [currentPage?.is_locked, spaceSlug, pageId, updateMetadata, refreshPageTree]);
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (currentPage?.is_locked) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       titleRef.current?.blur();
     }
-  }, []);
+  }, [currentPage?.is_locked]);
 
   if (isLoading) {
     return (
@@ -182,6 +226,57 @@ export default function PageViewPage() {
   }
 
   const showCover = !!currentPage.cover_url;
+  const pageMenuPortal = showPageMenu && pageMenuPosition
+    ? createPortal(
+        <>
+          <div className="fixed inset-0 z-[95]" onClick={() => setShowPageMenu(false)} />
+          <div
+            className="fixed bg-white border border-notion-border rounded-lg shadow-xl z-[100] min-w-[200px] py-1"
+            style={{ top: pageMenuPosition.top, right: pageMenuPosition.right }}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleFullPageToggle();
+              }}
+              disabled={!!currentPage.is_locked}
+              className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                currentPage.is_locked
+                  ? 'text-notion-textSecondary cursor-not-allowed'
+                  : 'text-notion-text hover:bg-notion-hover'
+              }`}
+            >
+              <span>全宽页面</span>
+              <div className={`w-8 h-4 rounded-full transition-colors relative ${currentPage.full_page ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${currentPage.full_page ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </div>
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleLockedToggle();
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 text-sm text-notion-text hover:bg-notion-hover transition-colors"
+            >
+              <span>锁定页面</span>
+              <div className={`w-8 h-4 rounded-full transition-colors relative ${currentPage.is_locked ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${currentPage.is_locked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </div>
+            </button>
+          </div>
+        </>,
+        document.body
+      )
+    : null;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-notion-bg">
@@ -210,43 +305,32 @@ export default function PageViewPage() {
             )}
             <div className="relative">
               <button
-              onClick={() => setShowPageMenu(!showPageMenu)}
-              className="p-1 hover:bg-notion-hover rounded transition-colors"
-            >
-              <MoreHorizontal className="w-4 h-4 text-notion-textSecondary" />
-            </button>
-            {showPageMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowPageMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-white border border-notion-border rounded-lg shadow-xl z-50 min-w-[200px] py-1">
-                  <button
-                    onClick={handleFullPageToggle}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm text-notion-text hover:bg-notion-hover transition-colors"
-                  >
-                    <span>全宽页面</span>
-                    <div className={`w-8 h-4 rounded-full transition-colors relative ${currentPage.full_page ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                      <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${currentPage.full_page ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                    </div>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+                type="button"
+                ref={pageMenuButtonRef}
+                onClick={togglePageMenu}
+                className="p-1 hover:bg-notion-hover rounded transition-colors"
+              >
+                <MoreHorizontal className="w-4 h-4 text-notion-textSecondary" />
+              </button>
+            </div>
           </div>
         }
       />
+      {pageMenuPortal}
 
       {/* 可滚动的内容区域 — Breadcrumb 固定，只有这部分滚动 */}
       <div className="page-content-scroll flex-1 overflow-y-auto">
 
         {/* Cover image - full width at top */}
         {showCover && (
-          <CoverImage
-            coverUrl={currentPage.cover_url}
-            coverOffset={currentPage.cover_offset}
-            spaceSlug={spaceSlug!}
-            pageId={currentPage.id}
-          />
+          <div className={currentPage.is_locked ? 'pointer-events-none' : ''}>
+            <CoverImage
+              coverUrl={currentPage.cover_url}
+              coverOffset={currentPage.cover_offset}
+              spaceSlug={spaceSlug!}
+              pageId={currentPage.id}
+            />
+          </div>
         )}
 
         {/* Page content area — min-h-full fills scroll viewport so clickable area covers all whitespace */}
@@ -255,14 +339,16 @@ export default function PageViewPage() {
           {/* Icon */}
           {currentPage.icon && (
             <div className={showCover ? `relative ml-2 ${currentPage.icon_large ? '-mt-[72px]' : '-mt-[42px]'}` : 'ml-2'}>
-              <PageIcon
-                icon={currentPage.icon}
-                iconLarge={currentPage.icon_large}
-                spaceSlug={spaceSlug!}
-                pageId={currentPage.id}
-              />
+              <div className={currentPage.is_locked ? 'pointer-events-none' : ''}>
+                <PageIcon
+                  icon={currentPage.icon}
+                  iconLarge={currentPage.icon_large}
+                  spaceSlug={spaceSlug!}
+                  pageId={currentPage.id}
+                />
+              </div>
               {/* Add cover button in icon-title gap, hover self to show */}
-              {!showCover && (
+              {!showCover && !currentPage.is_locked && (
                 <div className="h-0 translate-y-2 -ml-2 overflow-visible opacity-0 hover:opacity-100 transition-opacity duration-100">
                   <CoverImage
                     coverUrl={currentPage.cover_url}
@@ -278,13 +364,13 @@ export default function PageViewPage() {
 
           {/* Page controls - 添加图标/封面 buttons, hover self to show */}
           {!currentPage.icon && (
-            <div className="flex items-center gap-0.5 opacity-0 hover:opacity-100 transition-opacity duration-100 py-3">
+            <div className={`flex items-center gap-0.5 transition-opacity duration-100 py-3 ${currentPage.is_locked ? 'opacity-0 pointer-events-none' : 'opacity-0 hover:opacity-100'}`}>
               <PageIcon
                 icon={currentPage.icon}
                 spaceSlug={spaceSlug!}
                 pageId={currentPage.id}
               />
-              {!showCover && (
+              {!showCover && !currentPage.is_locked && (
                 <CoverImage
                   coverUrl={currentPage.cover_url}
                   coverOffset={currentPage.cover_offset}
@@ -299,11 +385,11 @@ export default function PageViewPage() {
           <h1
             key={`title-${currentPage.id}`}
             ref={titleRef}
-            contentEditable
+            contentEditable={!currentPage.is_locked}
             suppressContentEditableWarning
             onBlur={handleTitleBlur}
             onKeyDown={handleTitleKeyDown}
-            className="text-[40px] font-bold text-notion-text leading-[1.2] outline-none focus:outline-none px-2"
+            className={`text-[40px] font-bold text-notion-text leading-[1.2] px-2 ${currentPage.is_locked ? 'cursor-default' : 'outline-none focus:outline-none'}`}
             data-placeholder="未命名页面"
           >
             {currentPage.title || '未命名页面'}
@@ -316,7 +402,7 @@ export default function PageViewPage() {
               initialContent={currentContent}
               pageIdentity={{ spaceSlug: spaceSlug!, pageId: currentPage.id }}
               onSyncStatusChange={handleSyncStatusChange}
-              readOnly={false}
+              readOnly={!!currentPage.is_locked}
             />
           </div>
         </div>

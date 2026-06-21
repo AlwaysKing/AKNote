@@ -136,6 +136,10 @@ func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.pageService.Update(slug, pageID, &req)
 	if err != nil {
+		if err.Error() == "page is locked" {
+			http.Error(w, err.Error(), http.StatusLocked)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -159,6 +163,10 @@ func (h *PageHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.pageService.UpdateMeta(slug, pageID, &req)
 	if err != nil {
+		if err.Error() == "page is locked" {
+			http.Error(w, err.Error(), http.StatusLocked)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

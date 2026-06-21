@@ -10,6 +10,7 @@ type Page struct {
 	Icon      string    `json:"icon" db:"icon"`
 	CoverURL  string    `json:"cover_url" db:"cover_url"`
 	FullPage    bool      `json:"full_page" db:"full_page"`
+	IsLocked    bool      `json:"is_locked" db:"is_locked"`
 	IconLarge   bool      `json:"icon_large" db:"-"`
 	CoverOffset int       `json:"cover_offset" db:"-"`
 	SortOrder   float64   `json:"sort_order" db:"sort_order"`
@@ -46,6 +47,7 @@ type UpdatePageMetaRequest struct {
 	Icon        *string  `json:"icon"`
 	CoverURL    *string  `json:"cover_url"`
 	FullPage    *bool    `json:"full_page"`
+	IsLocked    *bool    `json:"is_locked"`
 	IconLarge   *bool    `json:"icon_large"`
 	CoverOffset *int     `json:"cover_offset"`
 	SortOrder   *float64 `json:"sort_order"`

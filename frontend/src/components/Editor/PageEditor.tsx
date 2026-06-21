@@ -212,18 +212,20 @@ const NOTION_TOGGLE_HEADING_PATHS: Record<number, string> = {
 };
 
 // Notion heading icon — uses exact Notion SVG paths (viewBox 0 0 20 20)
+// 渲染尺寸 18px，与 BlockNote 默认 slash menu 图标 (react-icons size:18) 一致
 function NotionHeadingIcon({ level }: { level: number }) {
   return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
+    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
       <path d={NOTION_HEADING_PATHS[level]} />
     </svg>
   );
 }
 
 // Notion toggle heading icon — uses exact Notion SVG paths (viewBox 0 0 20 20)
+// 渲染尺寸 18px，与 BlockNote 默认 slash menu 图标 (react-icons size:18) 一致
 function NotionToggleHeadingIcon({ level }: { level: number }) {
   return (
-    <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor">
+    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
       <path d={NOTION_TOGGLE_HEADING_PATHS[level]} />
     </svg>
   );
@@ -271,12 +273,16 @@ function getCustomSlashMenuItems(editor: any) {
       (item as any).icon = <NotionToggleHeadingIcon level={tLevel} />;
     }
   }
-  // Sort 基础区块 items to: headings first, then toggle headings
+  // Sort 基础区块 items to: paragraph → heading → heading_2 → heading_3 → heading_4 → toggle_heading → ...
+  // Comparator must be total/consistent: items not in BASE_BLOCK_ORDER are treated as Infinity
+  // so they sort after all ordered items, preserving their original relative order (stable sort).
   filtered.sort((a: any, b: any) => {
     const aOrder = BASE_BLOCK_ORDER[a.key];
     const bOrder = BASE_BLOCK_ORDER[b.key];
-    if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder;
-    return 0;
+    if (aOrder === undefined && bOrder === undefined) return 0;
+    if (aOrder === undefined) return 1;
+    if (bOrder === undefined) return -1;
+    return aOrder - bOrder;
   });
   const allItems = [
     ...filtered,
@@ -309,7 +315,7 @@ function getCustomSlashMenuItems(editor: any) {
       key: 'mark',
       aliases: ['mark', '强调'],
       group: '高级区块',
-      icon: <svg viewBox="0 0 18 18" style={{ width: '18px', height: '18px', fill: 'none', overflow: 'visible' }}><rect x="3.25" y="3.25" width="11.5" height="11.5" rx="2.25" stroke="currentColor" strokeWidth="1.25" /><path d="M6 4.75v8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M8.75 7h3.25" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" /><path d="M8.75 10h2.75" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" /></svg>,
+      icon: <svg viewBox="0 0 18 18" style={{ width: '18px', height: '18px', fill: 'none', overflow: 'visible' }}><rect x="2" y="2" width="14" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.25" /><path d="M4.75 3.5v11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /><path d="M7.5 6.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" /><path d="M7.5 9.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" /></svg>,
       onItemClick: () => {
         const currentBlock = editor.getTextCursorPosition().block;
         if (currentBlock.content === undefined) return;
@@ -332,7 +338,7 @@ function getCustomSlashMenuItems(editor: any) {
       key: 'subpage',
       aliases: ['subpage', 'page', '子页面', '页面'],
       group: '高级区块',
-      icon: <svg viewBox="4.12 2.37 11.75 15.25" style={{ width: '18px', height: '18px', fill: 'currentColor', overflow: 'visible' }}><path d="M13.3 14.25a.55.55 0 0 1-.55.55h-5.5a.55.55 0 1 1 0-1.1h5.5a.55.55 0 0 1 .55.55m-.55-1.95a.55.55 0 1 0 0-1.1h-5.5a.55.55 0 0 0 0 1.1z" /><path d="M6.25 2.375A2.125 2.125 0 0 0 4.125 4.5v11c0 1.174.951 2.125 2.125 2.125h7.5a2.125 2.125 0 0 0 2.125-2.125V8.121c0-.563-.224-1.104-.622-1.502L11.63 2.997a2.13 2.13 0 0 0-1.502-.622zM5.375 4.5c0-.483.392-.875.875-.875h3.7V6.25A2.05 2.05 0 0 0 12 8.3h2.625v7.2a.875.875 0 0 1-.875.875h-7.5a.875.875 0 0 1-.875-.875zm8.691 2.7H12a.95.95 0 0 1-.95-.95V4.184z" /></svg>,
+      icon: <svg viewBox="0 0 18 18" style={{ width: '18px', height: '18px', fill: 'currentColor', overflow: 'visible' }}><g transform="translate(3.64 0.61) scale(1.1) translate(-4.125 -2.375)"><path d="M13.3 14.25a.55.55 0 0 1-.55.55h-5.5a.55.55 0 1 1 0-1.1h5.5a.55.55 0 0 1 .55.55m-.55-1.95a.55.55 0 1 0 0-1.1h-5.5a.55.55 0 0 0 0 1.1z" /><path d="M6.25 2.375A2.125 2.125 0 0 0 4.125 4.5v11c0 1.174.951 2.125 2.125 2.125h7.5a2.125 2.125 0 0 0 2.125-2.125V8.121c0-.563-.224-1.104-.622-1.502L11.63 2.997a2.13 2.13 0 0 0-1.502-.622zM5.375 4.5c0-.483.392-.875.875-.875h3.7V6.25A2.05 2.05 0 0 0 12 8.3h2.625v7.2a.875.875 0 0 1-.875.875h-7.5a.875.875 0 0 1-.875-.875zm8.691 2.7H12a.95.95 0 0 1-.95-.95V4.184z" /></g></svg>,
       onItemClick: () => {
         const currentBlock = editor.getTextCursorPosition().block;
         if (currentBlock.content === undefined) return;
@@ -356,7 +362,7 @@ function getCustomSlashMenuItems(editor: any) {
       key: 'columns',
       aliases: ['columns', 'column', '多列', '分栏'],
       group: '高级区块',
-      icon: <svg viewBox="0 0 18 18" style={{ width: '18px', height: '18px', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5 }}><rect x="1" y="2" width="6.5" height="14" rx="1.5" /><rect x="10.5" y="2" width="6.5" height="14" rx="1.5" /></svg>,
+      icon: <svg viewBox="0 0 18 18" style={{ width: '18px', height: '18px', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5 }}><rect x="2" y="2" width="6.25" height="14" rx="1.5" /><rect x="9.75" y="2" width="6.25" height="14" rx="1.5" /></svg>,
       onItemClick: () => {
         const currentBlock = editor.getTextCursorPosition().block;
         const blockContent = currentBlock.content;
@@ -2240,8 +2246,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         const resolvedMediaUrl = resolvePageAssetUrl(blockProps.url, identityRef.current.spaceSlug, identityRef.current.pageId);
         const wrapper = blockContent.querySelector('.bn-file-block-content-wrapper') as HTMLElement | null;
         const mediaWrapper = blockContent.querySelector('.bn-visual-media-wrapper') as HTMLElement | null;
-        const imageEl = blockContent.querySelector('.bn-visual-media') as HTMLImageElement | null;
-        const videoEl = blockContent.querySelector('.bn-visual-media') as HTMLVideoElement | null;
+        const imageEl = blockContent.querySelector('img.bn-visual-media') as HTMLImageElement | null;
+        const videoEl = blockContent.querySelector('video.bn-visual-media') as HTMLVideoElement | null;
         if (!wrapper || !mediaWrapper || (!imageEl && !videoEl)) return;
 
         const currentMediaSrc = imageEl?.getAttribute('src') || videoEl?.getAttribute('src') || '';
@@ -2326,6 +2332,7 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
         wrapper.classList.add('bn-image-shell');
         mediaWrapper.classList.add('bn-image-media-shell');
         imageEl?.classList.add('bn-image-media');
+        videoEl?.classList.add('bn-image-media');
         wrapper.classList.toggle('is-selected', isSelected);
 
         if (!wrapper.dataset.selectionBound) {

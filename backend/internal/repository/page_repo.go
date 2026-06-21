@@ -16,7 +16,7 @@ func NewPageRepository(db *sql.DB) *PageRepository {
 	return &PageRepository{db: db}
 }
 
-const pageColumns = `id, title, file_path, icon, cover_url, full_page, sort_order, is_starred, last_accessed_at, created_at, updated_at`
+const pageColumns = `id, title, file_path, icon, cover_url, full_page, is_locked, sort_order, is_starred, last_accessed_at, created_at, updated_at`
 
 func scanPage(scanner interface{ Scan(...interface{}) error }) (*model.Page, error) {
 	var page model.Page
@@ -24,7 +24,7 @@ func scanPage(scanner interface{ Scan(...interface{}) error }) (*model.Page, err
 	var lastAccessed sql.NullTime
 	err := scanner.Scan(
 		&page.ID, &page.Title, &page.FilePath,
-		&icon, &coverURL, &page.FullPage, &page.SortOrder,
+		&icon, &coverURL, &page.FullPage, &page.IsLocked, &page.SortOrder,
 		&page.IsStarred, &lastAccessed,
 		&page.CreatedAt, &page.UpdatedAt,
 	)
@@ -45,12 +45,12 @@ func scanPage(scanner interface{ Scan(...interface{}) error }) (*model.Page, err
 
 func (r *PageRepository) Create(page *model.Page) (*model.Page, error) {
 	query := `
-		INSERT INTO pages (id, title, file_path, icon, cover_url, sort_order)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO pages (id, title, file_path, icon, cover_url, is_locked, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := r.db.Exec(query, page.ID, page.Title, page.FilePath,
-		page.Icon, page.CoverURL, page.SortOrder)
+		page.Icon, page.CoverURL, page.IsLocked, page.SortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create page: %w", err)
 	}
@@ -140,6 +140,10 @@ func (r *PageRepository) UpdateMeta(id string, req *model.UpdatePageMetaRequest)
 	if req.FullPage != nil {
 		setParts = append(setParts, "full_page = ?")
 		args = append(args, *req.FullPage)
+	}
+	if req.IsLocked != nil {
+		setParts = append(setParts, "is_locked = ?")
+		args = append(args, *req.IsLocked)
 	}
 	if req.SortOrder != nil {
 		setParts = append(setParts, "sort_order = ?")

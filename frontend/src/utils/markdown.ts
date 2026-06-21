@@ -214,12 +214,23 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
       continue;
     }
 
-    const markOpenMatch = trimmed.match(/^<mark(?:\s+([^>]*))?>$/);
+    const markOpenMatch = trimmed.match(/^<mark(?:\s+([^>]*))?>([\s\S]*)$/);
     if (markOpenMatch) {
       const attrs = parseTagAttributes(markOpenMatch[1] || '');
       const innerLines: string[] = [];
+      const firstLineContent = markOpenMatch[2] || '';
+      if (firstLineContent) {
+        innerLines.push(firstLineContent);
+      }
       i++;
-      while (i < lines.length && lines[i].trim() !== '</mark>') {
+
+      while (i < lines.length) {
+        const closeIdx = lines[i].indexOf('</mark>');
+        if (closeIdx !== -1) {
+          innerLines.push(lines[i].slice(0, closeIdx));
+          break;
+        }
+
         innerLines.push(lines[i]);
         i++;
       }
@@ -307,7 +318,7 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
       blocks.push({
         type: 'checkListItem',
         props: { checked },
-        content: [{ type: 'text', text, styles: {} }],
+        content: parseInlineFormatting(text),
       });
       i++;
       continue;
@@ -319,7 +330,7 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
       const text = numberedListMatch[2];
       blocks.push({
         type: 'numberedListItem',
-        content: [{ type: 'text', text, styles: {} }],
+        content: parseInlineFormatting(text),
       });
       i++;
       continue;
@@ -330,7 +341,7 @@ export function markdownToBlocks(markdown: string): PartialBlock[] {
       const text = trimmed.slice(2);
       blocks.push({
         type: 'bulletListItem',
-        content: [{ type: 'text', text, styles: {} }],
+        content: parseInlineFormatting(text),
       });
       i++;
       continue;

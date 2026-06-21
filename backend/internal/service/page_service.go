@@ -392,6 +392,9 @@ func (s *PageService) GetByID(spaceSlug string, pageID string) (*model.Page, err
 	if fm.FullPage != nil {
 		page.FullPage = *fm.FullPage
 	}
+	if fm.Locked != nil {
+		page.IsLocked = *fm.Locked
+	}
 	if fm.IconLarge != nil {
 		page.IconLarge = *fm.IconLarge
 	}
@@ -513,6 +516,9 @@ func (s *PageService) Update(spaceSlug string, pageID string, req *model.UpdateP
 	if err != nil {
 		return nil, err
 	}
+	if page.IsLocked {
+		return nil, errors.New("page is locked")
+	}
 
 	filePath := filepath.Join(s.docsDir, page.FilePath)
 	raw, err := os.ReadFile(filePath)
@@ -567,6 +573,9 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.Upd
 	if req.FullPage != nil {
 		fm.FullPage = req.FullPage
 	}
+	if req.IsLocked != nil {
+		fm.Locked = req.IsLocked
+	}
 	if req.IconLarge != nil {
 		fm.IconLarge = req.IconLarge
 	}
@@ -575,6 +584,12 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.Upd
 	}
 	if req.IsStarred != nil {
 		fm.Starred = req.IsStarred
+	}
+	if page.IsLocked {
+		unlocking := req.IsLocked != nil && !*req.IsLocked
+		if !unlocking {
+			return nil, errors.New("page is locked")
+		}
 	}
 
 	if req.Title != nil && *req.Title != "" && *req.Title != page.Title {
@@ -615,6 +630,7 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.Upd
 			Icon:      &fm.Icon,
 			CoverURL:  req.CoverURL,
 			FullPage:  fm.FullPage,
+			IsLocked:  fm.Locked,
 			SortOrder: req.SortOrder,
 		}
 	}
@@ -1005,6 +1021,7 @@ func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID 
 		Icon:        fm.Icon,
 		Cover:       fm.Cover,
 		FullPage:    fm.FullPage,
+		Locked:      fm.Locked,
 		IconLarge:   fm.IconLarge,
 		CoverOffset: fm.CoverOffset,
 		Starred:     fm.Starred,
@@ -1669,6 +1686,7 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 	log.Printf("Migrating space cache to UUID: %s", filepath.Base(spaceDir))
 
 	// Ensure columns that may have been added later exist (safe no-op if already present)
+	oldDB.Exec("ALTER TABLE pages ADD COLUMN is_locked BOOLEAN DEFAULT 0")
 	oldDB.Exec("ALTER TABLE pages ADD COLUMN is_starred BOOLEAN DEFAULT 0")
 	oldDB.Exec("ALTER TABLE pages ADD COLUMN last_accessed_at DATETIME")
 
@@ -1680,12 +1698,13 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 		Icon         string
 		CoverURL     string
 		FullPage     bool
+		IsLocked     bool
 		SortOrder    float64
 		IsStarred    bool
 		LastAccessed *time.Time
 	}
 
-	rows, err := oldDB.Query(`SELECT id, title, file_path, icon, cover_url, full_page, sort_order, COALESCE(is_starred, 0), last_accessed_at FROM pages`)
+	rows, err := oldDB.Query(`SELECT id, title, file_path, icon, cover_url, full_page, COALESCE(is_locked, 0), sort_order, COALESCE(is_starred, 0), last_accessed_at FROM pages`)
 	if err != nil {
 		return fmt.Errorf("failed to read old pages: %w", err)
 	}
@@ -1695,7 +1714,7 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 		var p oldPageRow
 		var icon, coverURL sql.NullString
 		var lastAccessed sql.NullTime
-		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &icon, &coverURL, &p.FullPage, &p.SortOrder, &p.IsStarred, &lastAccessed); err != nil {
+		if err := rows.Scan(&p.ID, &p.Title, &p.FilePath, &icon, &coverURL, &p.FullPage, &p.IsLocked, &p.SortOrder, &p.IsStarred, &lastAccessed); err != nil {
 			rows.Close()
 			return fmt.Errorf("failed to scan old page: %w", err)
 		}
@@ -1805,6 +1824,7 @@ func (s *PageService) migrateSpaceDB(spaceDir string) error {
 			Icon:      p.Icon,
 			CoverURL:  p.CoverURL,
 			FullPage:  p.FullPage,
+			IsLocked:  p.IsLocked,
 			SortOrder: p.SortOrder,
 			IsStarred: p.IsStarred,
 		}

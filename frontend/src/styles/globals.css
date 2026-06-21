@@ -346,12 +346,41 @@ h4[contenteditable],
 .bn-editor [data-content-type="codeBlock"] pre {
   padding: 16px !important;
   margin: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #c9c8c4 transparent !important;
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+.bn-editor [data-content-type="codeBlock"] pre::-webkit-scrollbar {
+  height: 10px;
+}
+.bn-editor [data-content-type="codeBlock"] pre::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.bn-editor [data-content-type="codeBlock"] pre::-webkit-scrollbar-thumb {
+  background: #c9c8c4;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.bn-editor [data-content-type="codeBlock"] pre::-webkit-scrollbar-thumb:hover {
+  background: #b8b7b2;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 .bn-editor [data-content-type="codeBlock"] .bn-inline-content,
 .bn-editor [data-content-type="codeBlock"] code {
   font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
   font-size: 13px !important;
   line-height: 1.5 !important;
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
 }
 
 /* Hide native <select> container — replaced by custom toolbar */

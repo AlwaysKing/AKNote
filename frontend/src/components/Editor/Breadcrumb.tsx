@@ -325,7 +325,7 @@ export default function Breadcrumb({ pageTitle, spaceSlug, actions }: Breadcrumb
   }, []);
 
   return (
-    <div className="flex items-center justify-between text-base text-notion-textSecondary h-11 px-4 select-none">
+    <div className="relative z-[80] flex items-center justify-between text-base text-notion-textSecondary h-11 px-4 select-none">
       <div className="flex items-center gap-1">
       {sidebarCollapsed && (
         <button

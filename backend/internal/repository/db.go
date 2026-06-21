@@ -69,6 +69,7 @@ func (db *DB) migrate() error {
 			icon TEXT,
 			cover_url TEXT,
 			full_page BOOLEAN DEFAULT 0,
+			is_locked BOOLEAN DEFAULT 0,
 			sort_order REAL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -137,6 +138,11 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("failed to migrate user_global_preferences: %w", err)
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE pages ADD COLUMN is_locked BOOLEAN DEFAULT 0`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("failed to migrate pages: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -187,7 +193,10 @@ func OpenSpaceDB(spaceDir string) (*sql.DB, error) {
 		icon TEXT,
 		cover_url TEXT,
 		full_page BOOLEAN DEFAULT 0,
+		is_locked BOOLEAN DEFAULT 0,
 		sort_order REAL DEFAULT 0,
+		is_starred BOOLEAN DEFAULT 0,
+		last_accessed_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`
@@ -195,9 +204,16 @@ func OpenSpaceDB(spaceDir string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create pages table: %w", err)
 	}
 
-	// Migrate: add is_starred and last_accessed_at columns if missing
-	db.Exec("ALTER TABLE pages ADD COLUMN is_starred BOOLEAN DEFAULT 0")
-	db.Exec("ALTER TABLE pages ADD COLUMN last_accessed_at DATETIME")
+	// Migrate existing space caches incrementally and fail fast on real errors.
+	for _, stmt := range []string{
+		"ALTER TABLE pages ADD COLUMN is_locked BOOLEAN DEFAULT 0",
+		"ALTER TABLE pages ADD COLUMN is_starred BOOLEAN DEFAULT 0",
+		"ALTER TABLE pages ADD COLUMN last_accessed_at DATETIME",
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return nil, fmt.Errorf("failed to migrate space database %s: %w", dbPath, err)
+		}
+	}
 
 	return db, nil
 }
