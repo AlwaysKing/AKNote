@@ -132,6 +132,11 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("failed to migrate user_global_preferences: %w", err)
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE user_global_preferences ADD COLUMN sidebar_width INTEGER`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("failed to migrate user_global_preferences: %w", err)
+		}
+	}
 
 	return nil
 }

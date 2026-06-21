@@ -23,16 +23,21 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 
 	// Get global preferences
 	var lastSpace sql.NullString
+	var sidebarWidth sql.NullInt64
 	var unsplashKey sql.NullString
 	err := r.db.QueryRow(
-		"SELECT last_active_space_slug, unsplash_api_key FROM user_global_preferences WHERE user_id = ?",
+		"SELECT last_active_space_slug, sidebar_width, unsplash_api_key FROM user_global_preferences WHERE user_id = ?",
 		userID,
-	).Scan(&lastSpace, &unsplashKey)
+	).Scan(&lastSpace, &sidebarWidth, &unsplashKey)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to get global preferences: %w", err)
 	}
 	if lastSpace.Valid {
 		prefs.LastActiveSpaceSlug = &lastSpace.String
+	}
+	if sidebarWidth.Valid {
+		width := int(sidebarWidth.Int64)
+		prefs.SidebarWidth = &width
 	}
 	prefs.HasUnsplashKey = unsplashKey.Valid && unsplashKey.String != ""
 
@@ -67,14 +72,20 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 	return prefs, nil
 }
 
-func (r *PreferenceRepository) UpsertGlobalPref(userID int, lastActiveSpaceSlug string) error {
+func (r *PreferenceRepository) UpsertGlobalPref(userID int, lastActiveSpaceSlug *string, sidebarWidth *int) error {
+	var sidebarValue interface{}
+	if sidebarWidth != nil {
+		sidebarValue = *sidebarWidth
+	}
+
 	_, err := r.db.Exec(`
-		INSERT INTO user_global_preferences (user_id, last_active_space_slug, updated_at)
-		VALUES (?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO user_global_preferences (user_id, last_active_space_slug, sidebar_width, updated_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
-			last_active_space_slug = excluded.last_active_space_slug,
+			last_active_space_slug = CASE WHEN ? IS NOT NULL THEN ? ELSE user_global_preferences.last_active_space_slug END,
+			sidebar_width = CASE WHEN ? IS NOT NULL THEN ? ELSE user_global_preferences.sidebar_width END,
 			updated_at = CURRENT_TIMESTAMP
-	`, userID, lastActiveSpaceSlug)
+	`, userID, lastActiveSpaceSlug, sidebarValue, lastActiveSpaceSlug, lastActiveSpaceSlug, sidebarValue, sidebarValue)
 	if err != nil {
 		return fmt.Errorf("failed to upsert global preference: %w", err)
 	}

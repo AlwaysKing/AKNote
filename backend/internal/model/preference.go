@@ -2,6 +2,7 @@ package model
 
 type UserPreferences struct {
 	LastActiveSpaceSlug *string                     `json:"last_active_space_slug"`
+	SidebarWidth        *int                        `json:"sidebar_width"`
 	SpacePreferences    map[string]*SpacePreference `json:"space_preferences"`
 	// HasUnsplashKey 只返回布尔，不暴露 key 本身（安全）
 	HasUnsplashKey bool `json:"has_unsplash_key"`
@@ -14,6 +15,7 @@ type SpacePreference struct {
 
 type UpdatePreferencesRequest struct {
 	LastActiveSpaceSlug *string   `json:"last_active_space_slug"`
+	SidebarWidth        *int      `json:"sidebar_width"`
 	SpaceSlug           *string   `json:"space_slug"`
 	LastViewedPageID    *string   `json:"last_viewed_page_id"`
 	ExpandedPageIDs     *[]string `json:"expanded_page_ids"`

@@ -53,7 +53,7 @@ export default function Sidebar({ onToggle }: SidebarProps) {
   // 管理面板侧边栏
   if (isAdmin) {
     return (
-      <aside className="w-[270px] bg-notion-sidebarBg h-screen flex flex-col border-r border-notion-border flex-shrink-0 select-none">
+      <aside className="w-full bg-notion-sidebarBg h-screen flex flex-col border-r border-notion-border flex-shrink-0 select-none">
         <div className="px-3 py-3 flex items-center gap-2">
           <button
             onClick={handleAdminBack}
@@ -187,7 +187,7 @@ export default function Sidebar({ onToggle }: SidebarProps) {
   );
 
   return (
-    <aside className="w-[270px] bg-notion-sidebarBg h-screen flex flex-col border-r border-notion-border flex-shrink-0 select-none">
+    <aside className="w-full bg-notion-sidebarBg h-screen flex flex-col border-r border-notion-border flex-shrink-0 select-none">
       {/* Space selector header */}
       <div className="px-2 flex items-center h-11 gap-1">
         <div className="relative" ref={userMenuRef}>

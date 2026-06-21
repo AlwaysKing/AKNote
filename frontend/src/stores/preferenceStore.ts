@@ -8,6 +8,7 @@ interface SpacePreference {
 
 interface UserPreferences {
   last_active_space_slug?: string | null;
+  sidebar_width?: number | null;
   space_preferences: Record<string, SpacePreference>;
   // 后端只返回布尔，key 本身不暴露给前端
   has_unsplash_key?: boolean;
@@ -18,8 +19,10 @@ interface PreferenceState {
   isLoaded: boolean;
   fetchPreferences: () => Promise<void>;
   setLastActiveSpace: (slug: string) => void;
+  setSidebarWidth: (width: number) => void;
   setLastViewedPage: (spaceSlug: string, pageId: string) => void;
   setExpandedPageIds: (spaceSlug: string, ids: string[]) => void;
+  getSidebarWidth: () => number | null | undefined;
   getExpandedPageIds: (spaceSlug: string) => string[];
   getLastViewedPageId: (spaceSlug: string) => string | null | undefined;
   setUnsplashKey: (key: string) => Promise<boolean>;
@@ -74,6 +77,14 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
     scheduleSave();
   },
 
+  setSidebarWidth: (width: number) => {
+    set((state) => ({
+      preferences: { ...state.preferences, sidebar_width: width },
+    }));
+    pendingUpdate.sidebar_width = width;
+    scheduleSave();
+  },
+
   setLastViewedPage: (spaceSlug: string, pageId: string) => {
     set((state) => {
       const prefs = { ...state.preferences, space_preferences: { ...state.preferences.space_preferences } };
@@ -100,6 +111,10 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
 
   getExpandedPageIds: (spaceSlug: string) => {
     return get().preferences.space_preferences[spaceSlug]?.expanded_page_ids || [];
+  },
+
+  getSidebarWidth: () => {
+    return get().preferences.sidebar_width;
   },
 
   getLastViewedPageId: (spaceSlug: string) => {
