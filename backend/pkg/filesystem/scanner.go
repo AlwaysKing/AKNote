@@ -20,6 +20,22 @@ func NewScanner(docsDir string) *Scanner {
 	return &Scanner{docsDir: docsDir}
 }
 
+// isDirOrSymlinkToDir 判断 DirEntry 是否为目录（跟随软链接）。
+// os.ReadDir 返回的 entry.IsDir() 不跟随软链接：软链接自身类型是 symlink，
+// 即便它指向一个目录，IsDir() 也会返回 false。为了让 docs/ 下的目录型软链接
+// （例如把外部仓库 symlink 进来当一个 space）能被识别，需要主动 os.Stat 跟随。
+func isDirOrSymlinkToDir(parentDir, name string) bool {
+	if name == "" {
+		return false
+	}
+	full := filepath.Join(parentDir, name)
+	info, err := os.Stat(full)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
 func (s *Scanner) ScanSpaces() ([]*model.Space, error) {
 	entries, err := os.ReadDir(s.docsDir)
 	if err != nil {
@@ -28,10 +44,10 @@ func (s *Scanner) ScanSpaces() ([]*model.Space, error) {
 
 	var spaces []*model.Space
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		if strings.HasPrefix(entry.Name(), ".") || entry.Name() == "_assets" {
 			continue
 		}
-		if entry.Name() == "_assets" {
+		if !isDirOrSymlinkToDir(s.docsDir, entry.Name()) {
 			continue
 		}
 		spaces = append(spaces, &model.Space{
@@ -73,7 +89,10 @@ func (s *Scanner) resolveSpaceDir(spaceSlug string) (string, string) {
 		return "", ""
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || entry.Name() == "_assets" {
+		if strings.HasPrefix(entry.Name(), ".") || entry.Name() == "_assets" {
+			continue
+		}
+		if !isDirOrSymlinkToDir(s.docsDir, entry.Name()) {
 			continue
 		}
 		if generateSlug(entry.Name()) == spaceSlug {
@@ -93,7 +112,10 @@ func (s *Scanner) scanDirectory(dirPath string, pathPrefix string) ([]*model.Pag
 	// Build a set of directory names for quick lookup
 	dirSet := make(map[string]bool)
 	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "_assets" {
+		if strings.HasPrefix(entry.Name(), ".") || entry.Name() == "_assets" {
+			continue
+		}
+		if isDirOrSymlinkToDir(dirPath, entry.Name()) {
 			dirSet[entry.Name()] = true
 		}
 	}
