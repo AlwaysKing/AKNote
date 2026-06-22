@@ -16,7 +16,7 @@
     {
       "label": "Backend Dev",
       "type": "shell",
-      "command": "cd backend && DATA_DIR=../data DOCS_DIR=../docs PORT=8801 go run ./cmd/server",
+      "command": "cd backend && DATA_DIR=../userdata/data DOCS_DIR=../userdata/docs PORT=8801 go run ./cmd/server",
       "isBackground": true,
       "problemMatcher": [],
       "group": "none",

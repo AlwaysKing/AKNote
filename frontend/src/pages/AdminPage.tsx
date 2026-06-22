@@ -11,6 +11,7 @@ import { Trash2, Edit2, Plus, X, UserPlus, Smile, ChevronDown, ChevronUp, Check,
 import PageIcon from '../components/Editor/PageIcon';
 import { usePreferenceStore } from '../stores/preferenceStore';
 import apiClient from '../api/client';
+import { CODE_THEME_OPTIONS, CODE_THEME_PREVIEW_SNIPPET, getCodeThemeRegistration, normalizeCodeTheme } from '../utils/codeTheme';
 
 interface EditingUser {
   id: number;
@@ -32,6 +33,8 @@ const roleLabels: Record<string, string> = {
 
 export default function AdminPage() {
   const location = useLocation();
+  const codeTheme = usePreferenceStore((state) => normalizeCodeTheme(state.preferences.code_theme));
+  const setCodeTheme = usePreferenceStore((state) => state.setCodeTheme);
 
   const { user: currentUser } = useAuthStore();
   const isAdminUser = currentUser?.role === 'admin';
@@ -107,6 +110,8 @@ export default function AdminPage() {
   const [unsplashKeyConfigured, setUnsplashKeyConfigured] = useState(false);
   const [unsplashMsg, setUnsplashMsg] = useState('');
   const [unsplashTesting, setUnsplashTesting] = useState(false);
+  const [codeThemePreviewHtml, setCodeThemePreviewHtml] = useState('');
+  const [codeThemePreviewLoading, setCodeThemePreviewLoading] = useState(false);
 
   // ---- 空间管理状态 ----
   const [spaces, setSpaces] = useState<Space[]>([]);
@@ -219,6 +224,42 @@ export default function AdminPage() {
       }
     })();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'profile') return;
+
+    let cancelled = false;
+    setCodeThemePreviewLoading(true);
+
+    (async () => {
+      try {
+        const { createHighlighter } = await import('shiki');
+        const themeRegistration = getCodeThemeRegistration(codeTheme);
+        const highlighter = await createHighlighter({
+          themes: [themeRegistration],
+          langs: ['xml'],
+        });
+        const html = highlighter.codeToHtml(CODE_THEME_PREVIEW_SNIPPET, {
+          lang: 'xml',
+          theme: typeof themeRegistration === 'string' ? themeRegistration : themeRegistration.name,
+        });
+        if (!cancelled) {
+          setCodeThemePreviewHtml(html);
+          setCodeThemePreviewLoading(false);
+        }
+      } catch (err) {
+        console.error('Failed to render code theme preview:', err);
+        if (!cancelled) {
+          setCodeThemePreviewHtml('');
+          setCodeThemePreviewLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, codeTheme]);
 
   useEffect(() => {
     if (activeTab === 'spaces') {
@@ -1832,7 +1873,7 @@ export default function AdminPage() {
         </div>
 
         {/* 修改密码 */}
-        <div className="bg-white rounded-lg border border-notion-border p-6">
+        <div className="bg-white rounded-lg border border-notion-border p-6 mb-6">
           <h3 className="text-sm font-medium text-notion-text mb-3">修改密码</h3>
           <div className="space-y-0">
             {row('当前密码', <input type="password" value={passwordForm.old_password} onChange={(e) => setPasswordForm({ ...passwordForm, old_password: e.target.value })} className="w-64 px-2 py-1 border border-notion-border rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-300" />)}
@@ -1869,6 +1910,58 @@ export default function AdminPage() {
             ))}
           </div>
           {passwordMsg && <div className={`text-sm mt-3 ${passwordMsg.includes('成功') ? 'text-green-600' : 'text-red-600'}`}>{passwordMsg}</div>}
+        </div>
+
+        <div className="bg-white rounded-lg border border-notion-border p-6 mb-6">
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
+            <div>
+              <h3 className="text-sm font-medium text-notion-text mb-1">编辑器显示</h3>
+              <p className="text-xs text-notion-textSecondary mb-4">
+                仅影响代码块的语法高亮颜色，不会改变你当前保留的代码块背景样式。
+              </p>
+              <div className="space-y-0">
+                {row('代码主题', (
+                  <div className="flex min-w-0 items-center gap-3">
+                    <select
+                      value={codeTheme}
+                      onChange={(e) => setCodeTheme(normalizeCodeTheme(e.target.value))}
+                      className="min-w-0 w-full max-w-[18rem] px-2 py-1 border border-notion-border rounded text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-300"
+                    >
+                      {CODE_THEME_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                {row('主题说明', (
+                  <span className="text-sm text-notion-textSecondary">
+                    {CODE_THEME_OPTIONS.find((option) => option.value === codeTheme)?.description}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-xs font-medium text-notion-textSecondary tracking-[0.02em]">实时预览</h4>
+                <span className="text-[11px] text-notion-textSecondary">XML 示例</span>
+              </div>
+              <div className="code-theme-preview rounded-[10px] overflow-hidden border border-[#eceae6] bg-[rgba(66,35,3,0.03)] min-h-[228px]">
+                {codeThemePreviewHtml ? (
+                  <div
+                    className="code-theme-preview-html"
+                    dangerouslySetInnerHTML={{ __html: codeThemePreviewHtml }}
+                  />
+                ) : (
+                  <div className="flex min-h-[228px] items-center justify-center text-sm text-notion-textSecondary">
+                    {codeThemePreviewLoading ? '预览加载中...' : '预览生成失败'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 第三方集成：Unsplash */}

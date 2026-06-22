@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import apiClient from '../api/client';
+import { normalizeCodeTheme, resetShikiThemeCache, type CodeThemeValue } from '../utils/codeTheme';
 
 interface SpacePreference {
   last_viewed_page_id?: string | null;
@@ -9,6 +10,7 @@ interface SpacePreference {
 interface UserPreferences {
   last_active_space_slug?: string | null;
   sidebar_width?: number | null;
+  code_theme?: string | null;
   space_preferences: Record<string, SpacePreference>;
   // 后端只返回布尔，key 本身不暴露给前端
   has_unsplash_key?: boolean;
@@ -22,9 +24,11 @@ interface PreferenceState {
   setSidebarWidth: (width: number) => void;
   setLastViewedPage: (spaceSlug: string, pageId: string) => void;
   setExpandedPageIds: (spaceSlug: string, ids: string[]) => void;
+  setCodeTheme: (theme: CodeThemeValue) => void;
   getSidebarWidth: () => number | null | undefined;
   getExpandedPageIds: (spaceSlug: string) => string[];
   getLastViewedPageId: (spaceSlug: string) => string | null | undefined;
+  getCodeTheme: () => CodeThemeValue;
   setUnsplashKey: (key: string) => Promise<boolean>;
 }
 
@@ -62,7 +66,15 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
   fetchPreferences: async () => {
     try {
       const res = await apiClient.get<UserPreferences>('/user/preferences');
-      set({ preferences: res.data, isLoaded: true });
+      const nextPreferences = {
+        ...res.data,
+        code_theme: normalizeCodeTheme(res.data.code_theme),
+      };
+      const previousTheme = normalizeCodeTheme(get().preferences.code_theme);
+      if (nextPreferences.code_theme !== previousTheme) {
+        resetShikiThemeCache();
+      }
+      set({ preferences: nextPreferences, isLoaded: true });
     } catch (err) {
       console.error('Failed to fetch preferences:', err);
       set({ isLoaded: true });
@@ -109,6 +121,19 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
     scheduleSave();
   },
 
+  setCodeTheme: (theme: CodeThemeValue) => {
+    const normalizedTheme = normalizeCodeTheme(theme);
+    const currentTheme = normalizeCodeTheme(get().preferences.code_theme);
+    if (normalizedTheme === currentTheme) return;
+
+    resetShikiThemeCache();
+    set((state) => ({
+      preferences: { ...state.preferences, code_theme: normalizedTheme },
+    }));
+    pendingUpdate.code_theme = normalizedTheme;
+    scheduleSave();
+  },
+
   getExpandedPageIds: (spaceSlug: string) => {
     return get().preferences.space_preferences[spaceSlug]?.expanded_page_ids || [];
   },
@@ -119,6 +144,10 @@ export const usePreferenceStore = create<PreferenceState>((set, get) => ({
 
   getLastViewedPageId: (spaceSlug: string) => {
     return get().preferences.space_preferences[spaceSlug]?.last_viewed_page_id;
+  },
+
+  getCodeTheme: () => {
+    return normalizeCodeTheme(get().preferences.code_theme);
   },
 
   setUnsplashKey: async (key: string) => {

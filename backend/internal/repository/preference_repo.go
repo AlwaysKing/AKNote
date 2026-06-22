@@ -24,11 +24,12 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 	// Get global preferences
 	var lastSpace sql.NullString
 	var sidebarWidth sql.NullInt64
+	var codeTheme sql.NullString
 	var unsplashKey sql.NullString
 	err := r.db.QueryRow(
-		"SELECT last_active_space_slug, sidebar_width, unsplash_api_key FROM user_global_preferences WHERE user_id = ?",
+		"SELECT last_active_space_slug, sidebar_width, code_theme, unsplash_api_key FROM user_global_preferences WHERE user_id = ?",
 		userID,
-	).Scan(&lastSpace, &sidebarWidth, &unsplashKey)
+	).Scan(&lastSpace, &sidebarWidth, &codeTheme, &unsplashKey)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to get global preferences: %w", err)
 	}
@@ -38,6 +39,9 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 	if sidebarWidth.Valid {
 		width := int(sidebarWidth.Int64)
 		prefs.SidebarWidth = &width
+	}
+	if codeTheme.Valid {
+		prefs.CodeTheme = &codeTheme.String
 	}
 	prefs.HasUnsplashKey = unsplashKey.Valid && unsplashKey.String != ""
 
@@ -72,20 +76,25 @@ func (r *PreferenceRepository) GetByUserID(userID int) (*model.UserPreferences, 
 	return prefs, nil
 }
 
-func (r *PreferenceRepository) UpsertGlobalPref(userID int, lastActiveSpaceSlug *string, sidebarWidth *int) error {
+func (r *PreferenceRepository) UpsertGlobalPref(userID int, lastActiveSpaceSlug *string, sidebarWidth *int, codeTheme *string) error {
 	var sidebarValue interface{}
 	if sidebarWidth != nil {
 		sidebarValue = *sidebarWidth
 	}
+	var codeThemeValue interface{}
+	if codeTheme != nil {
+		codeThemeValue = *codeTheme
+	}
 
 	_, err := r.db.Exec(`
-		INSERT INTO user_global_preferences (user_id, last_active_space_slug, sidebar_width, updated_at)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO user_global_preferences (user_id, last_active_space_slug, sidebar_width, code_theme, updated_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_id) DO UPDATE SET
 			last_active_space_slug = CASE WHEN ? IS NOT NULL THEN ? ELSE user_global_preferences.last_active_space_slug END,
 			sidebar_width = CASE WHEN ? IS NOT NULL THEN ? ELSE user_global_preferences.sidebar_width END,
+			code_theme = CASE WHEN ? IS NOT NULL THEN ? ELSE user_global_preferences.code_theme END,
 			updated_at = CURRENT_TIMESTAMP
-	`, userID, lastActiveSpaceSlug, sidebarValue, lastActiveSpaceSlug, lastActiveSpaceSlug, sidebarValue, sidebarValue)
+	`, userID, lastActiveSpaceSlug, sidebarValue, codeThemeValue, lastActiveSpaceSlug, lastActiveSpaceSlug, sidebarValue, sidebarValue, codeThemeValue, codeThemeValue)
 	if err != nil {
 		return fmt.Errorf("failed to upsert global preference: %w", err)
 	}

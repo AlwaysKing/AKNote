@@ -29,6 +29,7 @@ export default function PageViewPage() {
   const navigate = useNavigate();
   const { currentPage, currentContent, fetchPage, isLoading, error, refreshPageTree, updateMetadata } = usePageStore();
   const { setCurrentSpace } = useSpaceStore();
+  const codeTheme = usePreferenceStore((state) => state.getCodeTheme());
 
   useEffect(() => {
     if (!spaceSlug || !pageId) return;
@@ -398,11 +399,12 @@ export default function PageViewPage() {
           {/* Editor */}
           <div className="mt-4">
             <PageEditor
-              key={currentPage.id}
+              key={`${currentPage.id}:${codeTheme}`}
               initialContent={currentContent}
               pageIdentity={{ spaceSlug: spaceSlug!, pageId: currentPage.id }}
               onSyncStatusChange={handleSyncStatusChange}
               readOnly={!!currentPage.is_locked}
+              codeTheme={codeTheme}
             />
           </div>
         </div>

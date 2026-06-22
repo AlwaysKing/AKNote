@@ -18,8 +18,8 @@ func (s *PreferenceService) GetByUserID(userID int) (*model.UserPreferences, err
 }
 
 func (s *PreferenceService) Update(userID int, req *model.UpdatePreferencesRequest) error {
-	if req.LastActiveSpaceSlug != nil || req.SidebarWidth != nil {
-		if err := s.prefRepo.UpsertGlobalPref(userID, req.LastActiveSpaceSlug, req.SidebarWidth); err != nil {
+	if req.LastActiveSpaceSlug != nil || req.SidebarWidth != nil || req.CodeTheme != nil {
+		if err := s.prefRepo.UpsertGlobalPref(userID, req.LastActiveSpaceSlug, req.SidebarWidth, req.CodeTheme); err != nil {
 			return err
 		}
 	}

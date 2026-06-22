@@ -375,9 +375,12 @@ h4[contenteditable],
 }
 .bn-editor [data-content-type="codeBlock"] .bn-inline-content,
 .bn-editor [data-content-type="codeBlock"] code {
-  font-family: 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
+  font-family: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
+  font-size: 13.6px !important;
+  font-weight: 400 !important;
+  line-height: 20.4px !important;
+  -webkit-font-smoothing: auto !important;
+  -moz-osx-font-smoothing: auto !important;
   white-space: pre !important;
   word-break: normal !important;
   overflow-wrap: normal !important;
@@ -386,6 +389,56 @@ h4[contenteditable],
 /* Hide native <select> container — replaced by custom toolbar */
 .bn-editor [data-content-type="codeBlock"] > div[contenteditable="false"]:has(select) {
   display: none !important;
+}
+
+.code-theme-preview .shiki,
+.code-theme-preview .shiki code {
+  background: transparent !important;
+}
+
+.code-theme-preview .shiki {
+  margin: 0 !important;
+  padding: 16px !important;
+  min-height: 228px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c9c8c4 transparent;
+  font-family: ui-monospace, 'SF Mono', 'SFMono-Regular', Menlo, Consolas, 'PT Mono', 'Liberation Mono', Courier, monospace !important;
+  font-size: 13.6px !important;
+  font-weight: 400 !important;
+  line-height: 20.4px !important;
+  -webkit-font-smoothing: auto !important;
+  -moz-osx-font-smoothing: auto !important;
+  white-space: pre !important;
+}
+
+.code-theme-preview .shiki::-webkit-scrollbar {
+  height: 10px;
+}
+
+.code-theme-preview .shiki::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.code-theme-preview .shiki::-webkit-scrollbar-thumb {
+  background: #c9c8c4;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.code-theme-preview .shiki::-webkit-scrollbar-thumb:hover {
+  background: #b8b7b2;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.code-theme-preview .shiki code {
+  display: block;
+  font-weight: inherit !important;
+  white-space: pre !important;
 }
 
 /* ===== Code Block Toolbar — custom language selector + copy ===== */

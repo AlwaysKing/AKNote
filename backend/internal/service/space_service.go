@@ -38,19 +38,11 @@ func (s *SpaceService) List(isAdmin bool, userID int) ([]*model.Space, error) {
 		return nil, fmt.Errorf("failed to sync spaces: %w", err)
 	}
 
-	// Admin sees all spaces, regular users see only their spaces
+	// Admin sees all spaces, regular users see only their member spaces.
 	if isAdmin {
 		return s.spaceRepo.ListByUserID(0)
 	}
-	spaces, err := s.spaceRepo.ListByUserID(userID)
-	if err != nil {
-		return nil, err
-	}
-	// If user has no memberships yet, return all spaces so they can see something
-	if len(spaces) == 0 {
-		return s.spaceRepo.ListByUserID(0)
-	}
-	return spaces, nil
+	return s.spaceRepo.ListByUserID(userID)
 }
 
 func (s *SpaceService) GetBySlug(slug string) (*model.Space, error) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, type ChangeEvent } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type ChangeEvent } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { BlockNoteViewRaw, useCreateBlockNote, ComponentsContext, SuggestionMenuController, FormattingToolbar, FormattingToolbarController, BasicTextStyleButton, ColorStyleButton, CreateLinkButton, BlockTypeSelect, FilePanelController, useBlockNoteEditor, useEditorState, useComponentsContext } from '@blocknote/react';
 import { CellSelection, TableMap, addColumnBefore, addColumnAfter, deleteColumn, addRowBefore, addRowAfter, deleteRow, toggleHeader } from 'prosemirror-tables';
@@ -38,6 +38,7 @@ import { useSpaceStore } from '../../stores/spaceStore';
 import { flushSync } from '../../services/syncModule';
 import { clearHeaderHandleLock, getHeaderHandleLock, isHeaderMenuOpen, setHeaderHandleLock, setHeaderMenuOpen } from './tableHandleState';
 import { showToast } from '../Toast';
+import { getCodeThemeRegistration, normalizeCodeTheme, type CodeThemeValue } from '../../utils/codeTheme';
 
 // Supported languages for code block syntax highlighting
 // Keys must match Shiki bundled language IDs (https://shiki.style/languages)
@@ -83,32 +84,36 @@ const SUPPORTED_LANGUAGES: Record<string, { name: string; aliases?: string[] }> 
 // Shiki language IDs used for loading (exclude 'text' which has no highlighter)
 const SHIKI_LANG_IDS = Object.keys(SUPPORTED_LANGUAGES).filter((l) => l !== 'text');
 
-// Create code block spec with language selection and Shiki syntax highlighting
-const CodeBlockSpecWithHighlight = createCodeBlockSpec({
-  defaultLanguage: 'text',
-  supportedLanguages: SUPPORTED_LANGUAGES,
-  createHighlighter: async () => {
-    const { createHighlighter: createShikiHighlighter } = await import('shiki');
-    return createShikiHighlighter({
-      themes: ['github-light'],
-      langs: SHIKI_LANG_IDS,
-    });
-  },
-});
+function createCodeBlockSpecWithHighlight(codeTheme: CodeThemeValue) {
+  const themeRegistration = getCodeThemeRegistration(codeTheme);
+  return createCodeBlockSpec({
+    defaultLanguage: 'text',
+    supportedLanguages: SUPPORTED_LANGUAGES,
+    createHighlighter: async () => {
+      const { createHighlighter: createShikiHighlighter } = await import('shiki');
+      return createShikiHighlighter({
+        themes: [themeRegistration],
+        langs: SHIKI_LANG_IDS,
+      });
+    },
+  });
+}
 
-// Custom schema: default blocks + pageReference + bookmark + mark
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    codeBlock: CodeBlockSpecWithHighlight as any,
-    pageReference: PageReferenceBlockSpec(),
-    bookmark: BookmarkBlockSpec(),
-    mark: MarkBlockSpec(),
-    subpage: SubpageBlockSpec(),
-    column_list: ColumnListBlockSpec(),
-    column: ColumnBlockSpec(),
-  },
-});
+function createEditorSchema(codeTheme: CodeThemeValue) {
+  const codeBlockSpec = createCodeBlockSpecWithHighlight(codeTheme);
+  return BlockNoteSchema.create({
+    blockSpecs: {
+      ...defaultBlockSpecs,
+      codeBlock: codeBlockSpec as any,
+      pageReference: PageReferenceBlockSpec(),
+      bookmark: BookmarkBlockSpec(),
+      mark: MarkBlockSpec(),
+      subpage: SubpageBlockSpec(),
+      column_list: ColumnListBlockSpec(),
+      column: ColumnBlockSpec(),
+    },
+  });
+}
 
 // Internal URL detection — match only URLs from this app's origin
 const APP_ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
@@ -1761,6 +1766,7 @@ interface PageEditorProps {
   pageIdentity: { spaceSlug: string; pageId: string };
   onSyncStatusChange?: (status: 'unsaved' | 'syncing' | 'synced') => void;
   readOnly?: boolean;
+  codeTheme?: CodeThemeValue;
 }
 
 type FileUploadVisualState = {
@@ -1779,7 +1785,7 @@ const IMAGE_TOOLBAR_ICONS = {
   replace: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 10.5L5 13l2.5-2.5"/><path d="M5 3v10"/><path d="M13.5 5.5L11 3 8.5 5.5"/><path d="M11 13V3"/></svg>`,
 };
 
-export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, readOnly = false }: PageEditorProps) {
+export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, readOnly = false, codeTheme }: PageEditorProps) {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [editorEl, setEditorEl] = useState<HTMLDivElement | null>(null);
@@ -1808,6 +1814,8 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
   const [imageLightbox, setImageLightbox] = useState<{ url: string; name: string; type?: 'image' | 'video' } | null>(null);
   const imageReplaceInputRef = useRef<HTMLInputElement | null>(null);
   const imageReplaceTargetRef = useRef<string | null>(null);
+  const resolvedCodeTheme = normalizeCodeTheme(codeTheme);
+  const schema = useMemo(() => createEditorSchema(resolvedCodeTheme), [resolvedCodeTheme]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editor = useCreateBlockNote({

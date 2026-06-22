@@ -138,6 +138,11 @@ func (db *DB) migrate() error {
 			return fmt.Errorf("failed to migrate user_global_preferences: %w", err)
 		}
 	}
+	if _, err := db.Exec(`ALTER TABLE user_global_preferences ADD COLUMN code_theme TEXT`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			return fmt.Errorf("failed to migrate user_global_preferences: %w", err)
+		}
+	}
 	if _, err := db.Exec(`ALTER TABLE pages ADD COLUMN is_locked BOOLEAN DEFAULT 0`); err != nil {
 		if !strings.Contains(err.Error(), "duplicate column") {
 			return fmt.Errorf("failed to migrate pages: %w", err)
