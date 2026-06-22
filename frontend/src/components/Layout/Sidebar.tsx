@@ -1,4 +1,4 @@
-import { Settings, ChevronsLeft, Trash2, ArrowLeft, Users, Database, User, Image, ChevronDown, ChevronRight, Plus, LogOut } from 'lucide-react';
+import { Settings, ChevronsLeft, Trash2, ArrowLeft, Users, Database, User, Image, ChevronDown, ChevronRight, Plus, LogOut, GitBranch } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SpaceSelector from '../Sidebar/SpaceSelector';
 import PageTree from '../Sidebar/PageTree';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useSpaceStore } from '../../stores/spaceStore';
 import { usePageStore } from '../../stores/pageStore';
 import { useState, useRef, useEffect } from 'react';
+import { gitApi, GitRepoState } from '../../api/git';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -29,6 +30,30 @@ export default function Sidebar({ onToggle }: SidebarProps) {
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Git state for the current space: only used to decide whether to show the
+  // Git button and to badge it with pending change count. Poll every 5s; cheap
+  // (single git status call server-side).
+  const [gitState, setGitState] = useState<GitRepoState | null>(null);
+  const slugForGit = currentSpace?.slug;
+  useEffect(() => {
+    if (!slugForGit) {
+      setGitState(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const s = await gitApi.state(slugForGit);
+        if (!cancelled) setGitState(s);
+      } catch {
+        if (!cancelled) setGitState(null);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [slugForGit]);
 
   useEffect(() => {
     if (!showUserMenu) return;
@@ -299,6 +324,29 @@ export default function Sidebar({ onToggle }: SidebarProps) {
             </span>
             <span className="text-sm font-medium text-notion-sidebarText">回收站</span>
           </button>
+          {gitState?.is_repo && (
+            <button
+              onClick={() => navigate(`/s/${currentSpace?.slug}/git`)}
+              className="w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left"
+              style={{ paddingLeft: '16px', paddingRight: '8px' }}
+              title={`分支: ${gitState.branch || '(detached)'}${gitState.has_remote ? ` | remote: ${gitState.remote}` : ''}`}
+            >
+              <span className="flex items-center justify-center flex-shrink-0 mr-2 relative" style={{ width: '22px', height: '18px' }}>
+                <GitBranch className="w-[18px] h-[18px] text-[#91918e]" strokeWidth={1.7} />
+                {gitState.dirty_count > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 flex items-center justify-center text-[10px] font-medium bg-red-500 text-white rounded-full">
+                    {gitState.dirty_count > 99 ? '99+' : gitState.dirty_count}
+                  </span>
+                )}
+              </span>
+              <span className="text-sm font-medium text-notion-sidebarText">Git 管理</span>
+              {gitState.has_upstream && (gitState.ahead > 0 || gitState.behind > 0) && (
+                <span className="ml-1 text-[11px] text-notion-sidebarText/60">
+                  (↑{gitState.ahead}↓{gitState.behind})
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={() => navigate('/admin?tab=profile')}
             className="w-full flex items-center h-[30px] rounded-md hover:bg-notion-hover transition-colors text-left"

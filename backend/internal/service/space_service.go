@@ -16,6 +16,22 @@ type SpaceService struct {
 	memberRepo *repository.MemberRepository
 	pageService *PageService
 	docsDir    string
+
+	// gitSync is optional; when set, space create/rename/delete notify the
+	// auto-commit worker.
+	gitSync *GitSyncWorker
+}
+
+// SetGitSyncWorker wires the auto-commit worker. Optional; call once at startup.
+func (s *SpaceService) SetGitSyncWorker(w *GitSyncWorker) {
+	s.gitSync = w
+}
+
+func (s *SpaceService) markGitDirty(spaceSlug string) {
+	if s.gitSync == nil || spaceSlug == "" {
+		return
+	}
+	s.gitSync.MarkDirty(spaceSlug)
 }
 
 func NewSpaceService(
@@ -82,6 +98,10 @@ func (s *SpaceService) Create(req *model.CreateSpaceRequest, creatorID int) (*mo
 		return nil, fmt.Errorf("failed to add creator as admin: %w", err)
 	}
 
+	// If this directory happens to already be a git repo (e.g. user pre-init'd
+	// it on the server), notify the worker so the README gets committed.
+	s.markGitDirty(slug)
+
 	return space, nil
 }
 
@@ -91,6 +111,7 @@ func (s *SpaceService) Update(slug string, req *model.UpdateSpaceRequest) (*mode
 		return nil, err
 	}
 
+	var newSlugAfterRename string
 	// If name is changed, update directory
 	if req.Name != nil && *req.Name != space.Name {
 		oldPath := filepath.Join(s.docsDir, space.Name)
@@ -100,11 +121,19 @@ func (s *SpaceService) Update(slug string, req *model.UpdateSpaceRequest) (*mode
 			return nil, fmt.Errorf("failed to rename directory: %w", err)
 		}
 
-		newSlug := s.generateSlug(*req.Name)
-		req.Slug = &newSlug
+		newSlugAfterRename = s.generateSlug(*req.Name)
+		req.Slug = &newSlugAfterRename
 	}
 
-	return s.spaceRepo.Update(space.ID, req)
+	updated, err := s.spaceRepo.Update(space.ID, req)
+	if err != nil {
+		return nil, err
+	}
+	// Only notify after the DB update succeeds.
+	if newSlugAfterRename != "" {
+		s.markGitDirty(newSlugAfterRename)
+	}
+	return updated, nil
 }
 
 func (s *SpaceService) Delete(slug string) error {

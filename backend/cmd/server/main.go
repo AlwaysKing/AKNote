@@ -64,8 +64,18 @@ func main() {
 	// Initialize services
 	authService := service.NewAuthService(userRepo, jwtSecret)
 	userService := service.NewUserService(userRepo, authService)
+	gitService := service.NewGitService(docsDir)
+	gitService.SetCredentialStore(service.NewCredentialStore(filepath.Join(dataDir, "git_credentials")))
+	gitSyncWorker := service.NewGitSyncWorker(gitService)
+	// When config changes, invalidate the worker's cache so new auto-commit
+	// settings apply immediately instead of after the TTL.
+	gitService.SetOnConfigChange(gitSyncWorker.InvalidateConfig)
+	gitSyncWorker.Start()
+	defer gitSyncWorker.Stop()
 	pageService := service.NewPageService(docsDir)
+	pageService.SetGitSyncWorker(gitSyncWorker)
 	spaceService := service.NewSpaceService(spaceRepo, memberRepo, pageService, docsDir)
+	spaceService.SetGitSyncWorker(gitSyncWorker)
 	prefService := service.NewPreferenceService(prefRepo)
 	siteSettingService := service.NewSiteSettingService(siteSettingRepo)
 	bookmarkService := service.NewBookmarkService(bookmarkRepo)
@@ -90,6 +100,7 @@ func main() {
 	siteSettingHandler := handler.NewSiteSettingHandler(siteSettingService, siteDir)
 	bookmarkHandler := handler.NewBookmarkHandler(bookmarkService)
 	unsplashHandler := handler.NewUnsplashHandler(prefService)
+	gitHandler := handler.NewGitHandler(gitService, spaceService)
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
@@ -155,6 +166,17 @@ func main() {
 		r.Get("/api/spaces/{slug}/trash", pageHandler.ListTrash)
 		r.Post("/api/spaces/{slug}/trash/restore", pageHandler.RestoreFromTrash)
 		r.Post("/api/spaces/{slug}/trash/delete", pageHandler.PermanentDelete)
+
+		// Git (per-space; UI hides these when space isn't a git repo)
+		r.Get("/api/spaces/{slug}/git/state", gitHandler.State)
+		r.Post("/api/spaces/{slug}/git/commit", gitHandler.Commit)
+		r.Post("/api/spaces/{slug}/git/push", gitHandler.Push)
+		r.Post("/api/spaces/{slug}/git/pull", gitHandler.Pull)
+		r.Get("/api/spaces/{slug}/git/config", gitHandler.GetConfig)
+		r.Put("/api/spaces/{slug}/git/config", gitHandler.SetConfig)
+		r.Get("/api/spaces/{slug}/git/credentials", gitHandler.GetCredential)
+		r.Put("/api/spaces/{slug}/git/credentials", gitHandler.SetCredential)
+		r.Delete("/api/spaces/{slug}/git/credentials", gitHandler.DeleteCredential)
 
 		// Bookmark
 		r.Get("/api/bookmark/meta", bookmarkHandler.GetMeta)

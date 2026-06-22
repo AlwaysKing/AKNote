@@ -25,6 +25,24 @@ type PageService struct {
 	repos   map[string]*repository.PageRepository
 	dbs     map[string]interface{ Close() error }
 	mu      sync.RWMutex
+
+	// gitSync is optional; when set, file writes notify the worker so auto-commit
+	// can pick them up. Safe to leave nil (default) — the hook becomes a no-op.
+	gitSync *GitSyncWorker
+}
+
+// SetGitSyncWorker wires the auto-commit worker. Optional; call once at startup.
+func (s *PageService) SetGitSyncWorker(w *GitSyncWorker) {
+	s.gitSync = w
+}
+
+// markGitDirty notifies the auto-commit worker (if configured) that this space
+// has pending writes. Non-blocking and best-effort.
+func (s *PageService) markGitDirty(spaceSlug string) {
+	if s.gitSync == nil || spaceSlug == "" {
+		return
+	}
+	s.gitSync.MarkDirty(spaceSlug)
 }
 
 // resolveSpaceDir finds the actual directory for a space slug.
@@ -421,6 +439,7 @@ func (s *PageService) GetByID(spaceSlug string, pageID string) (*model.Page, err
 }
 
 func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spaceID int) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -507,6 +526,7 @@ func (s *PageService) Create(spaceSlug string, req *model.CreatePageRequest, spa
 }
 
 func (s *PageService) Update(spaceSlug string, pageID string, req *model.UpdatePageRequest) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -539,6 +559,7 @@ func (s *PageService) Update(spaceSlug string, pageID string, req *model.UpdateP
 }
 
 func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.UpdatePageMetaRequest) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -650,6 +671,7 @@ func (s *PageService) UpdateMeta(spaceSlug string, pageID string, req *model.Upd
 }
 
 func (s *PageService) Delete(spaceSlug string, pageID string) error {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return err
@@ -740,6 +762,7 @@ func (s *PageService) GetAssetPath(spaceSlug string, pageID string, assetPath st
 }
 
 func (s *PageService) UploadAsset(spaceSlug string, pageID string, filename string, content []byte) (string, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return "", err
@@ -822,6 +845,7 @@ func (s *PageService) ListTrash(spaceSlug string) ([]TrashedItem, error) {
 }
 
 func (s *PageService) RestoreFromTrash(spaceSlug string, trashRelPath string, spaceID int) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -897,6 +921,7 @@ func (s *PageService) RestoreFromTrash(spaceSlug string, trashRelPath string, sp
 // RestoreByPageID finds a trashed page by its frontmatter ID and restores it.
 // Used by undo to recover subpage pages that were deleted.
 func (s *PageService) RestoreByPageID(spaceSlug string, pageID string, spaceID int) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	spaceDir, _ := s.resolveSpaceDir(spaceSlug)
 	if spaceDir == "" {
 		return nil, fmt.Errorf("space not found: %s", spaceSlug)
@@ -946,6 +971,7 @@ func (s *PageService) findTrashPageByID(trashDir string, spaceSlug string, pageI
 }
 
 func (s *PageService) PermanentDelete(spaceSlug string, trashRelPath string) error {
+	s.markGitDirty(spaceSlug)
 	trashAbsPath := filepath.Join(s.docsDir, trashRelPath)
 	if err := os.Remove(trashAbsPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete: %w", err)
@@ -959,6 +985,7 @@ func (s *PageService) PermanentDelete(spaceSlug string, trashRelPath string) err
 
 // Duplicate creates a copy of a page (and its entire subtree) under an optional target parent.
 func (s *PageService) Duplicate(spaceSlug string, pageID string, targetParentID *string, spaceID int) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
@@ -1128,6 +1155,7 @@ func copyDirRecursive(src, dst string) error {
 
 // Move relocates a page (and its subtree) to a new parent.
 func (s *PageService) Move(spaceSlug string, pageID string, targetParentID *string, afterID *string) (*model.Page, error) {
+	s.markGitDirty(spaceSlug)
 	repo, err := s.getRepo(spaceSlug)
 	if err != nil {
 		return nil, err
