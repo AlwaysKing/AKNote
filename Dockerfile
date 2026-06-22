@@ -28,7 +28,11 @@ RUN CGO_ENABLED=1 GOOS=linux go build -o akmdlibrary ./cmd/server
 # Stage 3: Runtime
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata
+# ca-certificates: TLS for HTTPS git remotes / API calls
+# tzdata: localized timestamps
+# git: per-space git operations (commit/push/pull)
+# openssh-client: ssh binary for git over SSH remotes
+RUN apk add --no-cache ca-certificates tzdata git openssh-client
 
 WORKDIR /app
 
