@@ -225,3 +225,58 @@ func (h *SiteSettingHandler) GetLogoPath() string {
 	}
 	return ""
 }
+
+// ServeManifest returns a PWA Web App Manifest reflecting current site settings (public).
+// Site name and icon are wired to the admin-configured values so the installed PWA
+// stays in sync with /api/site-settings without rebuilding the frontend.
+func (h *SiteSettingHandler) ServeManifest(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.siteSettingService.Get()
+	if err != nil {
+		http.Error(w, "Failed to load site settings", http.StatusInternalServerError)
+		return
+	}
+
+	name := "MD Library"
+	if settings != nil && settings.SiteName != nil && *settings.SiteName != "" {
+		name = *settings.SiteName
+	}
+
+	manifest := map[string]any{
+		"name":             name,
+		"short_name":       name,
+		"description":      "MD Library",
+		"start_url":        "/",
+		"scope":            "/",
+		"display":          "standalone",
+		"background_color": "#ffffff",
+		"theme_color":      "#ffffff",
+		"icons": []map[string]any{
+			{"src": "/api/site-assets/pwa-icon", "sizes": "any", "purpose": "any"},
+			{"src": "/api/site-assets/pwa-icon", "sizes": "any", "purpose": "maskable"},
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/manifest+json; charset=utf-8")
+	// Manifest 在站点设置变更后必须及时生效，禁用强制缓存，允许每次重新验证。
+	w.Header().Set("Cache-Control", "no-cache")
+	if err := json.NewEncoder(w).Encode(manifest); err != nil {
+		http.Error(w, "Failed to encode manifest", http.StatusInternalServerError)
+		return
+	}
+}
+
+// ServePWAIcon serves the current favicon at a stable URL so the PWA manifest
+// can reference it without knowing its extension. Falls back to the bundled
+// frontend SVG when no custom favicon is configured.
+func (h *SiteSettingHandler) ServePWAIcon(w http.ResponseWriter, r *http.Request) {
+	favPath := h.GetFaviconPath()
+	if favPath == "" {
+		// No custom favicon → fall back to the default Vite SVG shipped with the frontend.
+		http.Redirect(w, r, "/vite.svg", http.StatusFound)
+		return
+	}
+
+	// http.ServeFile sets Content-Type from the file extension automatically.
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, favPath)
+}
