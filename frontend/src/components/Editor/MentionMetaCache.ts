@@ -1,6 +1,7 @@
 import { bookmarksApi, BookmarkMeta } from '../../api/bookmarks';
 import { useSpaceStore } from '../../stores/spaceStore';
 import { pagesApi, Page } from '../../api/pages';
+import { normalizeInternalPageLink, parseInternalPageLink } from '../../utils/internalLinks';
 
 export interface LinkMeta {
   title: string;
@@ -11,8 +12,7 @@ export interface LinkMeta {
   page_id?: string;
 }
 
-const APP_ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
-const INTERNAL_URL_RE = new RegExp(`^${APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/([^/]+)/p/([a-f0-9]{32})(?:$|/)`);
+const META_FAILURE_COOLDOWN_MS = 30000;
 
 function findPageInTree(tree: Page[], pageId: string): Page | null {
   for (const page of tree) {
@@ -28,22 +28,29 @@ function findPageInTree(tree: Page[], pageId: string): Page | null {
 class MentionMetaCacheClass {
   private cache = new Map<string, LinkMeta>();
   private pending = new Map<string, Promise<LinkMeta | null>>();
+  private failed = new Map<string, number>();
 
   get(url: string): LinkMeta | null {
-    return this.cache.get(url) || null;
+    const normalizedUrl = normalizeInternalPageLink(url);
+    return this.cache.get(normalizedUrl) || null;
   }
 
   async getOrFetch(url: string): Promise<LinkMeta | null> {
-    const cached = this.cache.get(url);
+    const normalizedUrl = normalizeInternalPageLink(url);
+    const cached = this.cache.get(normalizedUrl);
     if (cached) return cached;
 
-    const pending = this.pending.get(url);
+    const pending = this.pending.get(normalizedUrl);
     if (pending) return pending;
 
-    const internalMatch = url.match(INTERNAL_URL_RE);
+    const failedAt = this.failed.get(normalizedUrl);
+    if (failedAt && Date.now() - failedAt < META_FAILURE_COOLDOWN_MS) {
+      return null;
+    }
+
+    const internalMatch = parseInternalPageLink(url);
     if (internalMatch) {
-      const spaceSlug = internalMatch[1];
-      const pageId = internalMatch[2];
+      const { spaceSlug, pageId, relativePath } = internalMatch;
       const { pageTree } = useSpaceStore.getState();
       const treeMatch = findPageInTree(pageTree, pageId);
 
@@ -51,45 +58,49 @@ class MentionMetaCacheClass {
         try {
           const page = treeMatch || await pagesApi.get(spaceSlug, pageId);
           const result: LinkMeta = {
-            title: page.title || url,
+            title: page.title || relativePath,
             description: '',
             favicon_url: page.icon || '',
             image_url: '',
             is_internal: true,
             page_id: page.id,
           };
-          this.cache.set(url, result);
-          this.pending.delete(url);
+          this.cache.set(relativePath, result);
+          this.failed.delete(relativePath);
+          this.pending.delete(relativePath);
           return result;
         } catch {
-          this.pending.delete(url);
+          this.failed.set(relativePath, Date.now());
+          this.pending.delete(relativePath);
           return null;
         }
       })();
 
-      this.pending.set(url, internalPromise);
+      this.pending.set(relativePath, internalPromise);
       return internalPromise;
     }
 
-    const promise = bookmarksApi.getMeta(url)
+    const promise = bookmarksApi.getMeta(normalizedUrl)
       .then((meta: BookmarkMeta) => {
         const result: LinkMeta = {
-          title: meta.title || url,
+          title: meta.title || normalizedUrl,
           description: meta.description || '',
           favicon_url: meta.favicon_url || '',
           image_url: meta.image_url || '',
           is_internal: false,
         };
-        this.cache.set(url, result);
-        this.pending.delete(url);
+        this.cache.set(normalizedUrl, result);
+        this.failed.delete(normalizedUrl);
+        this.pending.delete(normalizedUrl);
         return result;
       })
       .catch(() => {
-        this.pending.delete(url);
+        this.failed.set(normalizedUrl, Date.now());
+        this.pending.delete(normalizedUrl);
         return null;
       });
 
-    this.pending.set(url, promise);
+    this.pending.set(normalizedUrl, promise);
     return promise;
   }
 }

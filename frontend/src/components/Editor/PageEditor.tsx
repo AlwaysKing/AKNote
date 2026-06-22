@@ -39,6 +39,7 @@ import { flushSync } from '../../services/syncModule';
 import { clearHeaderHandleLock, getHeaderHandleLock, isHeaderMenuOpen, setHeaderHandleLock, setHeaderMenuOpen } from './tableHandleState';
 import { showToast } from '../Toast';
 import { getCodeThemeRegistration, normalizeCodeTheme, type CodeThemeValue } from '../../utils/codeTheme';
+import { normalizeInternalPageLink, parseInternalPageLink } from '../../utils/internalLinks';
 
 // Supported languages for code block syntax highlighting
 // Keys must match Shiki bundled language IDs (https://shiki.style/languages)
@@ -115,9 +116,6 @@ function createEditorSchema(codeTheme: CodeThemeValue) {
   });
 }
 
-// Internal URL detection — match only URLs from this app's origin
-const APP_ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
-const INTERNAL_URL_RE = new RegExp(`^${APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/([^/]+)/p/([a-f0-9]{32})(?:$|/)`);
 const URL_RE = /^https?:\/\/.+/;
 
 function resolvePageAssetUrl(rawUrl: string | undefined, spaceSlug?: string, pageId?: string): string {
@@ -1604,7 +1602,8 @@ function buildInternalLinkDecorations(doc: any, spaceSlug: string, _editorView?:
     const isMention = nodeText.startsWith(MENTION_PREFIX);
 
     if (isMention) {
-      const mentionUrl = href;
+      const mentionUrl = normalizeInternalPageLink(href);
+      const mentionMatch = parseInternalPageLink(mentionUrl);
       const meta = mentionMetaCache.get(mentionUrl);
 
       // Always hide original text and show badge
@@ -1691,7 +1690,7 @@ function buildInternalLinkDecorations(doc: any, spaceSlug: string, _editorView?:
       badge.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (meta?.is_internal) {
+        if (meta?.is_internal || mentionMatch) {
           if (e.metaKey) {
             window.open(mentionUrl, '_blank', 'noopener,noreferrer');
           } else {
@@ -1707,10 +1706,10 @@ function buildInternalLinkDecorations(doc: any, spaceSlug: string, _editorView?:
     }
 
     // Internal page link
-    const match = href.match(INTERNAL_URL_RE);
+    const match = parseInternalPageLink(href);
     if (!match) return;
 
-    const pageId = match[2];
+    const pageId = match.pageId;
     const meta = pageMetaCache.get(pageId);
 
     // Add class to hide original <a> text
@@ -1744,14 +1743,14 @@ function buildInternalLinkDecorations(doc: any, spaceSlug: string, _editorView?:
     badge.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      window.location.href = href;
+      window.location.href = match.relativePath;
     });
 
     decorations.push(Decoration.widget(pos, badge, { side: -1 }));
 
     // If meta not cached, fetch and trigger re-render
     if (!meta && spaceSlug) {
-      pageMetaCache.getOrFetch(pageId, spaceSlug).then(() => {
+      pageMetaCache.getOrFetch(pageId, match.spaceSlug || spaceSlug).then(() => {
         // Force a re-render by dispatching an empty transaction
         // The decoration will be rebuilt with the cached data
       });
@@ -4377,17 +4376,20 @@ export function PageEditor({ initialContent, pageIdentity, onSyncStatusChange, r
 
     const handlePaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData('text/plain')?.trim();
-      if (!text || !URL_RE.test(text)) return; // Not a URL, let default paste handle it
+      if (!text) return;
+
+      const internalLink = parseInternalPageLink(text);
+      if (internalLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleInsertMention(internalLink.relativePath);
+        return;
+      }
+
+      if (!URL_RE.test(text)) return; // Not a URL, let default paste handle it
 
       e.preventDefault();
       e.stopPropagation();
-
-      // Check if internal URL
-      const internalMatch = text.match(INTERNAL_URL_RE);
-      if (internalMatch) {
-        handleInsertMention(text);
-        return;
-      }
 
       // External URL: show menu at cursor position
       let x = 100, y = 100;

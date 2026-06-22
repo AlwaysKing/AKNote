@@ -5,10 +5,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-
-// Same regex as PageEditor.tsx
-const APP_ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
-const INTERNAL_URL_RE = new RegExp(`^${APP_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/([^/]+)/p/([a-f0-9]{32})(?:$|/)`);
+import { parseInternalPageLink } from '../../utils/internalLinks';
 
 interface LinkInfo {
   url: string;
@@ -120,7 +117,7 @@ const CustomLinkToolbar: React.FC = () => {
       if (!view) return;
 
       const link = getLinkFromElement(view, e.target);
-      if (link && !INTERNAL_URL_RE.test(link.url)) {
+      if (link && !parseInternalPageLink(link.url)) {
         if (hideTimerRef.current) {
           clearTimeout(hideTimerRef.current);
           hideTimerRef.current = undefined;
