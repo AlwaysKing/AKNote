@@ -34,6 +34,10 @@ export default function GitPage() {
   const [credMeta, setCredMeta] = useState<CredentialMeta | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState('');
+  // userTouchedMessage tracks whether the user has manually edited the commit
+  // message. Until they do, selecting files auto-fills the message with a
+  // sensible default. Once edited, we stop overwriting to respect their input.
+  const [userTouchedMessage, setUserTouchedMessage] = useState(false);
   const [busy, setBusy] = useState(false);
   const [output, setOutput] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -70,6 +74,28 @@ export default function GitPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // Auto-fill commit message from selected file names. Only runs until the
+  // user manually edits the message — once they do, we stop overwriting.
+  useEffect(() => {
+    if (userTouchedMessage) return;
+    if (selected.size === 0) {
+      setMessage('');
+      return;
+    }
+    const names = Array.from(selected).map((p) => {
+      // Strip directory + .md extension. For non-markdown files keep extension.
+      const base = p.split('/').pop() || p;
+      return base.endsWith('.md') ? base.slice(0, -3) : base;
+    });
+    if (names.length === 1) {
+      setMessage(`Update ${names[0]}`);
+    } else if (names.length <= 3) {
+      setMessage(`Update ${names.join(', ')}`);
+    } else {
+      setMessage(`Update ${names.slice(0, 3).join(', ')} 等 ${names.length} 个`);
+    }
+  }, [selected, userTouchedMessage]);
+
   const togglePath = (path: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -93,6 +119,7 @@ export default function GitPage() {
     try {
       await gitApi.commit(spaceSlug, message.trim(), Array.from(selected));
       setMessage('');
+      setUserTouchedMessage(false);
       setSelected(new Set());
       setOutput('Committed.');
       await refresh();
@@ -357,7 +384,7 @@ export default function GitPage() {
       <div className="mt-6 sticky bottom-0 bg-notion-bg py-3 border-t border-notion-border">
         <textarea
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => { setUserTouchedMessage(true); setMessage(e.target.value); }}
           placeholder="Commit message（必填）"
           rows={2}
           className="w-full px-3 py-2 text-sm rounded border border-notion-border bg-white resize-none focus:outline-none focus:border-notion-textSecondary"

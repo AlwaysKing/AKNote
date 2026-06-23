@@ -10,7 +10,8 @@ import PageIcon from '../components/Editor/PageIcon';
 import PageEditor from '../components/Editor/PageEditor';
 import { getLatestMirror } from '../services/mirrorStore';
 import { onSyncStatusChange, flushSync } from '../services/syncModule';
-import { MoreHorizontal, Loader2, Check, Lock } from 'lucide-react';
+import { gitApi, GitRepoState } from '../api/git';
+import { MoreHorizontal, Loader2, Check, Lock, UploadCloud, Save } from 'lucide-react';
 
 // 页面不存在时的提示
 function PageNotFound() {
@@ -55,7 +56,62 @@ export default function PageViewPage() {
   const [pageMenuPosition, setPageMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [syncStatus, setSyncStatus] = useState<'unsaved' | 'syncing' | 'synced' | null>(null);
   const [lastSyncDate, setLastSyncDate] = useState<Date | null>(null);
+  const [gitState, setGitState] = useState<GitRepoState | null>(null);
+  const [committing, setCommitting] = useState(false);
   const [, setTick] = useState(0);
+
+  // Refresh git state for the current space. Called on page mount, after
+  // successful sync (page content may now be on disk as a dirty file), and
+  // after a commit (file should no longer be in the dirty list).
+  const refreshGit = useCallback(async () => {
+    if (!spaceSlug) return;
+    try {
+      const s = await gitApi.state(spaceSlug);
+      setGitState(s);
+    } catch {
+      // Not a git repo / network error — leave gitState as-is (or null).
+    }
+  }, [spaceSlug]);
+
+  useEffect(() => {
+    refreshGit();
+  }, [refreshGit]);
+
+  // When a sync completes, the file on disk has changed → git state may have
+  // new dirty entries. Refresh so the per-page commit button appears.
+  useEffect(() => {
+    if (syncStatus === 'synced') {
+      refreshGit();
+    }
+  }, [syncStatus, refreshGit]);
+
+  const handleCommitPage = useCallback(async () => {
+    if (!spaceSlug || !currentPage?.file_path || committing) return;
+    setCommitting(true);
+    try {
+      // Strip "<spaceSlug>/" prefix — git paths are relative to repo root,
+      // not docsDir. See pageDirty derivation above.
+      const relPath = currentPage.file_path.startsWith(`${spaceSlug}/`)
+        ? currentPage.file_path.slice(spaceSlug.length + 1)
+        : currentPage.file_path;
+      await gitApi.commit(spaceSlug, `Update ${currentPage.title || relPath}`, [relPath]);
+      await refreshGit();
+    } catch (e: any) {
+      console.error('single-page commit failed:', e);
+    } finally {
+      setCommitting(false);
+    }
+  }, [spaceSlug, currentPage, committing, refreshGit]);
+
+  // page.file_path is relative to docsDir (e.g. "DLPPlus/重要通知.md"), but
+  // git status paths are relative to the repo root (= spaceDir, e.g. just
+  // "重要通知.md"). Strip the "<spaceSlug>/" prefix so they're comparable.
+  const repoRelative = currentPage?.file_path && spaceSlug
+    && currentPage.file_path.startsWith(`${spaceSlug}/`)
+    ? currentPage.file_path.slice(spaceSlug.length + 1)
+    : currentPage?.file_path;
+  const pageDirty = !!(gitState?.is_repo && repoRelative
+    && (gitState.files ?? []).some(f => f.path === repoRelative));
 
   // 每分钟刷新一次相对时间显示
   useEffect(() => {
@@ -288,9 +344,19 @@ export default function PageViewPage() {
         actions={
           <div className="flex items-center gap-2">
             {syncStatus === 'unsaved' && (
-              <span className="text-xs text-notion-textSecondary">
-                有内容尚未同步
-              </span>
+              <>
+                <span className="text-xs text-notion-textSecondary">
+                  有内容尚未同步
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { flushSync(); setSyncStatus('syncing'); }}
+                  title="立即同步 (等同于 Cmd+S)"
+                  className="p-1 hover:bg-notion-hover rounded transition-colors"
+                >
+                  <Save className="w-3.5 h-3.5 text-notion-textSecondary" />
+                </button>
+              </>
             )}
             {syncStatus === 'syncing' && (
               <span className="flex items-center gap-1 text-xs text-notion-textSecondary">
@@ -303,6 +369,19 @@ export default function PageViewPage() {
                 {formatSyncTime(lastSyncDate)}
                 <Check className="w-3 h-3" />
               </span>
+            )}
+            {gitState?.is_repo && pageDirty && (
+              <button
+                type="button"
+                onClick={handleCommitPage}
+                disabled={committing}
+                title={`提交此页面到 git (${currentPage?.file_path})`}
+                className="p-1 hover:bg-notion-hover rounded transition-colors disabled:opacity-40"
+              >
+                {committing
+                  ? <Loader2 className="w-3.5 h-3.5 text-notion-textSecondary animate-spin" />
+                  : <UploadCloud className="w-3.5 h-3.5 text-notion-textSecondary" />}
+              </button>
             )}
             <div className="relative">
               <button
