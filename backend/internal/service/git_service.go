@@ -614,15 +614,6 @@ func (e *gitError) SafePublicMessage() string {
 	case strings.Contains(low, "merge conflict"),
 		strings.Contains(low, "conflict"):
 		return "merge conflict; resolve manually on the server"
-	case strings.Contains(low, "permission denied"),
-		strings.Contains(low, "could not read username"),
-		strings.Contains(low, "authentication failed"),
-		strings.Contains(low, "invalid username or password"),
-		strings.Contains(low, "terminal prompt"),
-		strings.Contains(low, "host key verification failed"),
-		strings.Contains(low, "connection timed out"),
-		strings.Contains(low, "could not resolve host"):
-		return "remote authentication or network failed; check git credentials / SSH key / network on the server"
 	case strings.Contains(low, "nothing to commit"),
 		strings.Contains(low, "no changes added"):
 		return "nothing to commit"
@@ -656,6 +647,11 @@ func redactAndTruncate(s string) string {
 	// Match scheme://user:pass@ — credentials in URL. Replace user:pass with ***.
 	re := regexp.MustCompile(`(https?|ssh|git)://[^/\s:@]+:[^/\s:@]+@`)
 	s = re.ReplaceAllString(s, "$1://***:***@")
+	// Match scheme://user@ — URL with username only (no password). Common when
+	// a token is used as the username (e.g. https://xoxb-token@host). Replace
+	// the username so we don't leak it.
+	reUserOnly := regexp.MustCompile(`(https?|ssh|git)://[^/\s:@]+@`)
+	s = reUserOnly.ReplaceAllString(s, "$1://***@")
 	if len(s) > max {
 		s = s[:max] + "\n...(truncated)"
 	}
