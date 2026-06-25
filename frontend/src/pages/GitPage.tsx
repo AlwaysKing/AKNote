@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gitApi, GitRepoState, GitSyncConfig, GitFileStatus, CredentialMeta, CredentialType } from '../api/git';
+import { useSpaceStore } from '../stores/spaceStore';
 import {
   ArrowLeft,
   GitCommitHorizontal,
@@ -47,6 +48,11 @@ export default function GitPage() {
 
   const refresh = useCallback(async () => {
     if (!spaceSlug) return;
+    // Belt-and-suspenders: the sidebar button is hidden when the feature is
+    // off, but a user could still type the URL. Refuse to fire any request so
+    // we don't flood the console with 403s.
+    const space = useSpaceStore.getState().spaces.find((s) => s.slug === spaceSlug);
+    if (!space?.feature_flags?.git) return;
     try {
       const [s, c, cr] = await Promise.all([
         gitApi.state(spaceSlug),
@@ -67,6 +73,16 @@ export default function GitPage() {
       setError(e?.response?.data || e?.message || 'Failed to load git state');
     }
   }, [spaceSlug]);
+
+  // If git is disabled for this space, redirect to the space root. The route
+  // shouldn't be reachable via UI, this just enforces it directly.
+  useEffect(() => {
+    if (!spaceSlug) return;
+    const space = useSpaceStore.getState().spaces.find((s) => s.slug === spaceSlug);
+    if (space && !space.feature_flags?.git) {
+      navigate(`/s/${spaceSlug}`, { replace: true });
+    }
+  }, [spaceSlug, navigate]);
 
   useEffect(() => {
     refresh();

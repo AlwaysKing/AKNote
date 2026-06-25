@@ -39,10 +39,15 @@ export default function Sidebar({ onToggle }: SidebarProps) {
   // Git state for the current space: only used to decide whether to show the
   // Git button and to badge it with pending change count. Poll every 5s; cheap
   // (single git status call server-side).
+  // Guard on feature_flags.git: when the space has git disabled the backend
+  // returns 403 from /git/state, so we must not poll at all — otherwise the
+  // console floods with 403s and we'd never get useful state anyway. Treat the
+  // feature as absent (clear state, no requests) exactly like the button.
   const [gitState, setGitState] = useState<GitRepoState | null>(null);
   const slugForGit = currentSpace?.slug;
+  const gitEnabled = !!currentSpace?.feature_flags?.git;
   useEffect(() => {
-    if (!slugForGit) {
+    if (!slugForGit || !gitEnabled) {
       setGitState(null);
       return;
     }
@@ -58,7 +63,7 @@ export default function Sidebar({ onToggle }: SidebarProps) {
     tick();
     const id = setInterval(tick, 5000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [slugForGit]);
+  }, [slugForGit, gitEnabled]);
 
   useEffect(() => {
     if (!showUserMenu) return;

@@ -63,8 +63,15 @@ export default function PageViewPage() {
   // Refresh git state for the current space. Called on page mount, after
   // successful sync (page content may now be on disk as a dirty file), and
   // after a commit (file should no longer be in the dirty list).
+  // Skip entirely when the space has git disabled — backend returns 403 and
+  // we want the feature to look fully absent.
   const refreshGit = useCallback(async () => {
     if (!spaceSlug) return;
+    const space = useSpaceStore.getState().spaces.find((s) => s.slug === spaceSlug);
+    if (!space?.feature_flags?.git) {
+      setGitState(null);
+      return;
+    }
     try {
       const s = await gitApi.state(spaceSlug);
       setGitState(s);
