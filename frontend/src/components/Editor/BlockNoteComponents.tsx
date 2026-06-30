@@ -551,6 +551,10 @@ const GenericMenuDropdown: React.FC<{ className?: string; children?: ReactNode; 
   // Calculate fixed position for drag handle menu during render (before DOM commit).
   // Portal to document.body so position:fixed is truly viewport-relative,
   // unaffected by the floating-ui ancestor's CSS transform.
+  // Horizontal position and the initial top come from the drag handle rect here;
+  // the final top is corrected after mount by measuring the real menu height
+  // (useLayoutEffect below). We measure instead of estimating from CSS because
+  // font metrics / line-height rounding make item-height estimates drift.
   const dragHandleStyle = useMemo(() => {
     if (!isOpen || sub) return null;
 
@@ -574,34 +578,46 @@ const GenericMenuDropdown: React.FC<{ className?: string; children?: ReactNode; 
     const leftSpace = handleRect.left;
 
     let left: number;
-    let top: number;
-
     if (leftSpace >= menuWidth + gap) {
       // Enough space on the left — pop left
       left = handleRect.left - menuWidth - gap;
-      top = handleRect.top;
     } else {
       // Not enough space on the left — pop right, start after the drag handle
       left = handleRect.right + gap;
-      top = handleRect.top;
-
       // Clamp if overflows right edge
       if (left + menuWidth > window.innerWidth - gap) {
         left = window.innerWidth - menuWidth - gap;
       }
     }
 
-    // Clamp top to viewport
-    top = Math.max(4, Math.min(top, window.innerHeight - 100));
-
     return {
       position: 'fixed' as const,
       left: `${left}px`,
-      top: `${top}px`,
+      top: `${handleRect.top}px`, // initial; clamped to viewport after measuring real height
       width: `${menuWidth}px`,
       zIndex: 10000,
     };
   }, [isOpen, sub]);
+
+  // After the drag-handle menu mounts, measure its real height and clamp the
+  // top so the bottom never overflows the viewport. Runs synchronously before
+  // paint, so there is no flicker. `dragHandleStyle` is memoised on [isOpen, sub],
+  // so React keeps the same inline-style object across re-renders and won't
+  // overwrite the top we patch in here.
+  useLayoutEffect(() => {
+    if (!isOpen || sub) return;
+    const el = dropdownRef.current;
+    if (!el) return;
+    const height = el.getBoundingClientRect().height;
+    if (height === 0) return;
+    const gap = 4;
+    const bottomLimit = window.innerHeight - height - gap;
+    const currentTop = parseFloat(el.style.top) || 0;
+    const nextTop = Math.max(gap, Math.min(currentTop, bottomLimit));
+    if (Math.abs(nextTop - currentTop) >= 0.5) {
+      el.style.top = `${nextTop}px`;
+    }
+  }, [isOpen, sub, dragHandleStyle]);
 
   useEffect(() => {
     if (!isOpen) return;
