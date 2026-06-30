@@ -195,14 +195,12 @@ export default function FilesPage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-notion-bg">
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[912px] mx-auto px-24 py-8 pb-32">
+      {/* Fixed head — title / upload / pending upload / search stay visible while the list scrolls */}
+      <div>
+        <div className="max-w-[912px] mx-auto px-24 pt-8">
           <div className="mb-6 flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-notion-text">文件管理</h1>
-              <p className="text-sm text-notion-textSecondary mt-0.5">
-                当前 space 的共享文件池（<code className="px-1 bg-notion-hover rounded">_files/</code>），可被 fileContent block 引用
-              </p>
+              <h1 className="text-2xl font-semibold text-notion-text">引用文件库</h1>
             </div>
             <button
               type="button"
@@ -271,6 +269,12 @@ export default function FilesPage() {
               className="flex-1 bg-transparent text-sm text-notion-text outline-none placeholder:text-notion-textSecondary"
             />
           </div>
+        </div>
+      </div>
+
+      {/* Scrollable file list — only this region scrolls */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[912px] mx-auto px-24 pb-32">
 
           {loading && (
             <div className="text-center py-16 text-notion-textSecondary text-sm">
