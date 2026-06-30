@@ -55,12 +55,19 @@ export default function TrashPage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-notion-bg">
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[912px] mx-auto px-24 py-8 pb-32">
+      {/* Fixed head — title stays visible while the list scrolls */}
+      <div>
+        <div className="max-w-[912px] mx-auto px-24 pt-8">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold text-notion-text">回收站</h1>
             <p className="text-sm text-notion-textSecondary mt-0.5">删除的页面可以在这里还原</p>
           </div>
+        </div>
+      </div>
+
+      {/* Scrollable list — only this region scrolls */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[912px] mx-auto px-24 pb-32">
 
           {items.length === 0 ? (
             <div className="text-center py-16">
